@@ -59,12 +59,7 @@ class RadioScheduler():
 		self.last_step_time = self.current_step_time
 
 	def test(self):
-		# track = self.get_next_track(1, 0)
-		# self.logger.info(track)
 		pass
-
-
-
 
 	def run(self):
 		quit = False
@@ -158,17 +153,19 @@ class RadioScheduler():
 			#
 
 	# new 'track prepare' event has been received:
-	#	1 - get next track and send it to the streamer
-	# 	2 - create 'track start' event for this new track
-	#  	3 - create next 'track prepare' event
 	def handle_new_track_prepare(self, event):
 		print self.EVENT_TYPE_NEW_TRACK_PREPARE
 		radio_id = event.get('radio_id', None)
 		if not radio_id:
 			return
-
 		delay_before_play = event.get('delay_before_play', self.SONG_PREPARE_DURATION)
+		self.prepare_track(radio_id, delay_before_play)
 
+
+	#	1 - get next track and send it to the streamer
+	# 	2 - create 'track start' event for this new track
+	#  	3 - create next 'track prepare' event
+	def prepare_track(self, radio_id, delay_before_play):
 		track = self.get_next_track(self, radio_id, delay_before_play)
 		track_filename = track.filename
 		track_duration = track.duration
@@ -185,6 +182,8 @@ class RadioScheduler():
 		}
 		if track.is_song:
 			event['song_id'] = track.song.id # add the song id in the event if the track is a song
+		if track.is_from_show:
+			event['show_id'] = track.show
 		self.radio_events.insert(event, safe=True)
 
 		# 3 - store next 'track prepare' event
@@ -341,3 +340,21 @@ class RadioScheduler():
 	def send_message(self, message):
 		#TODO
 		print 'send message: %s' % message
+
+
+	def start_radio(self, radio_id):
+		self.clean_radio(radio_id)
+		self.prepare_track(0) # no delay
+
+	def stop_radio(self, radio_id):
+		self.clean_radio(radio_id)
+
+	def clean_radio_events(self, radio_id):
+		self.radio_events.find({'radio_id': radio_id}).delete()
+
+	def clean_radio_states(self, radio_id):
+		self.radio_states.find({'radio_id': radio_id}).delete()
+
+	def clean_radio(self. radio_id):
+		self.clean_radio_events(radio_id)
+		self.clean_radio_states(radio_id)
