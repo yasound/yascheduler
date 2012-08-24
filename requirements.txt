@@ -1,0 +1,4 @@
+# Put here all your python libs dependencies before vtenv.sh
+redis
+SQLAlchemy
+pymongo
