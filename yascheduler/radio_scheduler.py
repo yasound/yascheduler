@@ -314,8 +314,11 @@ class RadioScheduler():
 			track.show = show
 		else:
 			radio_state = self.radio_states.find_one({'radio_id': radio_id})
-			previous_song = self.yaapp_alchemy_session.query(SongInstance).get(radio_state['song_id'])
-			previous_order = previous_song.order
+			previous_order = 0
+			if radio_state['show_id'] is not None:
+				# song stored in radio_state is a song from the show, so it has a valid order value
+				previous_song = self.yaapp_alchemy_session.query(SongInstance).get(radio_state['song_id'])
+				previous_order = previous_song.order
 			song = self.yaapp_alchemy_session.query(SongInstance).filter(SongInstance.playlist_id == playlist.id, SongInstance.order > previous_order).first()
 			if song is None:
 				return None
