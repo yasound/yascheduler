@@ -12,6 +12,7 @@ from threading import Thread, Lock
 import redis
 import json
 
+
 class Track:
     def __init__(self, filename, duration, song=None, show=None):
         self.filename = filename
@@ -36,7 +37,7 @@ class Track:
 
 
 class RedisListener(Thread):
-    WAIT_TIME = 0.020 # seconds
+    WAIT_TIME = 0.020  # seconds
 
     TYPE_MESSAGE_START_RADIO = 'start_radio'
     TYPE_MESSAGE_STOP_RADIO = 'stop_radio'
@@ -75,9 +76,9 @@ class RadioScheduler():
     MESSAGE_TYPE_RADIO_STARTED = 'radio_started'
     MESSAGE_TYPE_RADIO_STOPPED = 'radio_stopped'
 
-    DEFAULT_SECONDS_TO_WAIT = 0.050 # 50 milliseconds
+    DEFAULT_SECONDS_TO_WAIT = 0.050  # 50 milliseconds
 
-    SONG_PREPARE_DURATION = 5 # seconds
+    SONG_PREPARE_DURATION = 5  # seconds
 
     REDIS_PUBLISH_CHANNEL = 'yascheduler'
 
@@ -105,7 +106,6 @@ class RadioScheduler():
     def test(self):
         m = {'type': 'prout', 'name': 'blabla'}
         self.send_message(m)
-
 
     def run(self):
         # starts thread to listen to redis events
@@ -160,7 +160,7 @@ class RadioScheduler():
             time.sleep(seconds_to_wait)
 
             # store date for next step
-            last_step_time = self.current_step_time
+            self.last_step_time = self.current_step_time
 
     def handle_event(self, event):
         event_type = event.get('type', None)
@@ -201,7 +201,7 @@ class RadioScheduler():
             if show_id is None:
                 radio_state['show_id'] = None
                 radio_state['show_time'] = None
-            elif radio_state.has_key('show_id') == False or radio_state['show_id'] != show_id:
+            elif ('show_id' not in radio_state) or (radio_state['show_id'] != show_id):
                 # it's a new show
                 radio_state['show_id'] = show_id
                 radio_state['show_time'] = self.current_step_time
@@ -228,7 +228,6 @@ class RadioScheduler():
         delay_before_play = event.get('delay_before_play', self.SONG_PREPARE_DURATION)
         self.prepare_track(radio_id, delay_before_play)
 
-
     #   1 - get next track and send it to the streamer
     #   2 - create 'track start' event for this new track
     #   3 - create next 'track prepare' event
@@ -248,7 +247,7 @@ class RadioScheduler():
                 'filename': track_filename,
         }
         if track.is_song:
-            event['song_id'] = track.song.id # add the song id in the event if the track is a song
+            event['song_id'] = track.song.id  # add the song id in the event if the track is a song
         if track.is_from_show:
             event['show_id'] = track.show
         self.lock.acquire(True)
@@ -299,10 +298,8 @@ class RadioScheduler():
                         break
         return current
 
-
     def get_next_track(self, radio_id, delay_before_play):
         play_time = self.current_step_time + timedelta(seconds=delay_before_play)
-        play_day = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'][play_time.weekday()]
 
         playlists = self.yaapp_alchemy_session.query(Playlist).filter(Playlist.radio_id == radio_id)
         playlist_ids = [x[0] for x in playlists.values(Playlist.id)]
@@ -328,11 +325,11 @@ class RadioScheduler():
         # order by last_play_time
         query = self.yaapp_alchemy_session.query(SongInstance).join(SongMetadata).filter(SongInstance.playlist_id == playlist.id, SongInstance.enabled == True, or_(SongInstance.last_play_time < time_limit, SongInstance.last_play_time == None), SongMetadata.yasound_song_id > 0).order_by(SongInstance.last_play_time)
         count = query.count()
-        if count == 0: # try without time limit
+        if count == 0:  # try without time limit
             query = self.yaapp_alchemy_session.query(SongInstance).join(SongMetadata).filter(SongInstance.playlist_id == playlist.id, SongInstance.enabled == True, SongMetadata.yasound_song_id > 0).order_by(SongInstance.last_play_time)
             count = query.count()
         if count == 0:
-            self.logger.info('no song available for radio %d' % radio_id)
+            self.logger.info('no song available for playlist %d' % playlist.id)
             return None
 
         frequencies = [x[0] for x in query.values(SongInstance.frequency)]
@@ -340,11 +337,11 @@ class RadioScheduler():
         # multiply frequency weight by a date factor to have higher probabilities for songs not played since a long time (date factor = 1 for older song, 0.15 for more recent one)
         first_idx_factor = 1
         last_idx_factor = 0.15
-        if (count-1) == 0:
+        if (count - 1) == 0:
             date_factor_func = lambda x: 1
         else:
             date_factor_func = lambda x: ((last_idx_factor - first_idx_factor) / (count - 1)) * x + first_idx_factor
-        weights = [x*x * date_factor_func(idx) for idx, x in enumerate(frequencies)]
+        weights = [x * x * date_factor_func(idx) for idx, x in enumerate(frequencies)]
         r = random.random()
         sum_weight = sum(weights)
         rnd = r * sum_weight
@@ -372,7 +369,6 @@ class RadioScheduler():
         track = self.get_random_song(playlist, play_time)
         return track
 
-
     def get_song_in_show(self, radio_id, show_id, play_time):
         show = self.shows.find_one({'_id': show_id})
         if show is None:
@@ -398,7 +394,6 @@ class RadioScheduler():
             yasound_song = self.yasound_alchemy_session.query(YasoundSong).get(song.song_metadata.yasound_song_id)
             track = Track(yasound_song.filename, yasound_song.duration, song=song, show=show)
         return track
-
 
     def get_radio_jingle(self, radio_id):
         print 'get radio jingle'
@@ -430,11 +425,10 @@ class RadioScheduler():
         m = json.dumps(message)
         self.redis.publish(self.REDIS_PUBLISH_CHANNEL, m)
 
-
     def start_radio(self, radio_id):
         self.send_radio_started_message(radio_id)
         self.clean_radio(radio_id)
-        self.prepare_track(radio_id, 0) # no delay
+        self.prepare_track(radio_id, 0)  # no delay
 
     def stop_radio(self, radio_id):
         self.clean_radio(radio_id)
