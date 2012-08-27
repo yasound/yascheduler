@@ -39,6 +39,7 @@ class RedisListener(Thread):
     WAIT_TIME = 0.020 # seconds
 
     TYPE_MESSAGE_START_RADIO = 'start_radio'
+    TYPE_MESSAGE_STOP_RADIO = 'stop_radio'
 
     def __init__(self, radio_scheduler):
         Thread.__init__(self)
@@ -59,6 +60,9 @@ class RedisListener(Thread):
                 if data.get('type', None) == self.TYPE_MESSAGE_START_RADIO:
                     radio_id = data.get('radio_id')
                     self.radio_scheduler.start_radio(radio_id)
+                elif data.get('type', None) == self.TYPE_MESSAGE_STOP_RADIO:
+                    radio_id = data.get('radio_id')
+                    self.radio_scheduler.stop_radio(radio_id)
             time.sleep(self.WAIT_TIME)
 
 
@@ -68,10 +72,14 @@ class RadioScheduler():
     EVENT_TYPE_NEW_TRACK_START = 'start_new_track'
 
     MESSAGE_TYPE_PLAY = 'play'
+    MESSAGE_TYPE_RADIO_STARTED = 'radio_started'
+    MESSAGE_TYPE_RADIO_STOPPED = 'radio_stopped'
 
     DEFAULT_SECONDS_TO_WAIT = 0.050 # 50 milliseconds
 
     SONG_PREPARE_DURATION = 5 # seconds
+
+    REDIS_PUBLISH_CHANNEL = 'yascheduler'
 
     def __init__(self):
         self.logger = Logger().log
@@ -92,8 +100,11 @@ class RadioScheduler():
 
         self.cure_radio_events()
 
+        self.redis = redis.StrictRedis(host=settings.REDIS_HOST, db=settings.REDIS_DB)
+
     def test(self):
-        pass
+        m = {'type': 'prout', 'name': 'blabla'}
+        self.send_message(m)
 
 
     def run(self):
@@ -227,7 +238,7 @@ class RadioScheduler():
         track_duration = track.duration
 
         # 1 - send message to streamer
-        self.send_prepare_track_message(track_filename, delay_before_play)
+        self.send_prepare_track_message(radio_id, track_filename, delay_before_play)
 
         # 2 store 'track start' event
         event = {
@@ -395,25 +406,39 @@ class RadioScheduler():
     def get_time_jingle(self, radio_id):
         print 'get time jingle'
 
-    def send_prepare_track_message(self, track_filename, delay):
+    def send_prepare_track_message(self, radio_id, track_filename, delay):
         message = {'type': self.MESSAGE_TYPE_PLAY,
+                    'radio_id': radio_id,
                     'filename': track_filename,
                     'delay': delay
         }
         self.send_message(message)
 
+    def send_radio_started_message(self, radio_id):
+        message = {'type': self.MESSAGE_TYPE_RADIO_STARTED,
+                    'radio_id': radio_id,
+        }
+        self.send_message(message)
+
+    def send_radio_stopped_message(self, radio_id):
+        message = {'type': self.MESSAGE_TYPE_RADIO_STOPPED,
+                    'radio_id': radio_id,
+        }
+        self.send_message(message)
+
     def send_message(self, message):
-        #TODO
-        # print 'send message: %s' % message
-        pass
+        m = json.dumps(message)
+        self.redis.publish(self.REDIS_PUBLISH_CHANNEL, m)
 
 
     def start_radio(self, radio_id):
+        self.send_radio_started_message(radio_id)
         self.clean_radio(radio_id)
         self.prepare_track(radio_id, 0) # no delay
 
     def stop_radio(self, radio_id):
         self.clean_radio(radio_id)
+        self.send_radio_stopped_message(radio_id)
 
     def clean_radio_events(self, radio_id):
         self.lock.acquire(True)
