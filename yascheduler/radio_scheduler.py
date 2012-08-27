@@ -90,19 +90,29 @@ class RadioScheduler():
 
         self.lock = Lock()
 
-    def test(self):
-        thread = RedisListener(self)
-        thread.start()
+        self.cure_radio_events()
 
-        step_count = 30
-        step_index = 0
-        while step_index < step_count:
-          print 'step %d' % step_index
-          time.sleep(2)
-          step_index += 1
+    def test(self):
+        pass
 
 
     def run(self):
+        # starts thread to listen to redis events
+        thread = RedisListener(self)
+        thread.start()
+
+        #restart radios which should be active
+        for radio_state in self.radio_states.find():
+            radio_id = radio_state.get('radio_id', None)
+            if radio_id is None:
+                continue
+            event_count = self.radio_events.find({'radio_id': radio_id, 'date': {'$gte': datetime.now()}}).count()
+            print 'radio %d nb events %d' % (radio_id, event_count)
+            # if there are events for this radio, next track will be computed
+            # else, restart the radio
+            if event_count == 0:
+                self.start_radio(radio_id)
+
         quit = False
         self.last_step_time = datetime.now()
         while not quit:
@@ -110,7 +120,7 @@ class RadioScheduler():
 
             # find events between last step and now
             self.lock.acquire(True)
-            events = self.radio_events.find({'date': {'$gt': last_step_time, '$lte': self.current_step_time}})
+            events = self.radio_events.find({'date': {'$gt': self.last_step_time, '$lte': self.current_step_time}})
             self.lock.release()
             for e in events:
                 # handle event
@@ -136,15 +146,13 @@ class RadioScheduler():
                 seconds_to_wait = diff_timedelta.days * 86400 + diff_timedelta.seconds + diff_timedelta.microseconds / 1000000.0
 
             # waits until next event
-            print 'wait for %f seconds' % seconds_to_wait
             time.sleep(seconds_to_wait)
 
             # store date for next step
             last_step_time = self.current_step_time
 
     def handle_event(self, event):
-        print 'handle event: %s' % e
-        event_type = e.get('type', None)
+        event_type = event.get('type', None)
         if event_type == self.EVENT_TYPE_NEW_HOUR:
             self.handle_new_hour(event)
         elif event_type == self.EVENT_TYPE_NEW_TRACK_START:
@@ -159,7 +167,7 @@ class RadioScheduler():
         #TODO
 
     def handle_new_track_start(self, event):
-        print self.EVENT_TYPE_NEW_TRACK_START
+        print 'track start %s' % datetime.now().time().isoformat()
         radio_id = event.get('radio_id', None)
         if not radio_id:
             return
@@ -168,12 +176,14 @@ class RadioScheduler():
 
         radio_state = self.radio_states.find_one({'radio_id': radio_id})
         if radio_state is None:
-            doc = {'radio_id': radio_id,
+            radio_state = {'radio_id': radio_id,
                     'song_id': song_id,
                     'play_time': self.current_step_time,
                     'show_id': show_id,
                     'show_time': self.current_step_time if show_id is not None else None
             }
+            # insert the radio state in mongoDB
+            self.radio_states.insert(radio_state, safe=True)
         else:
             radio_state['song_id'] = song_id
             radio_state['play_time'] = self.current_step_time
@@ -184,8 +194,8 @@ class RadioScheduler():
                 # it's a new show
                 radio_state['show_id'] = show_id
                 radio_state['show_time'] = self.current_step_time
-        # update the radio state in mongoDB
-        self.radio_states.update({'_id': radio_state['_id']}, radio_state, upsert=True)
+            # update the radio state in mongoDB
+            self.radio_states.update({'_id': radio_state['_id']}, radio_state, safe=True)
 
         if song_id is not None:
             # a song is played (not a jingle)
@@ -200,7 +210,7 @@ class RadioScheduler():
 
     # new 'track prepare' event has been received:
     def handle_new_track_prepare(self, event):
-        print self.EVENT_TYPE_NEW_TRACK_PREPARE
+        print 'prepare track %s' % datetime.now().time().isoformat()
         radio_id = event.get('radio_id', None)
         if not radio_id:
             return
@@ -394,7 +404,8 @@ class RadioScheduler():
 
     def send_message(self, message):
         #TODO
-        print 'send message: %s' % message
+        # print 'send message: %s' % message
+        pass
 
 
     def start_radio(self, radio_id):
@@ -415,3 +426,8 @@ class RadioScheduler():
     def clean_radio(self, radio_id):
         self.clean_radio_events(radio_id)
         self.clean_radio_states(radio_id)
+
+    def cure_radio_events(self):
+        self.lock.acquire(True)
+        self.radio_events.remove({'date': {'$lt': datetime.now()}})
+        self.lock.release()

@@ -9,4 +9,4 @@ execfile(activate_this, dict(__file__=activate_this))
 from radio_scheduler import RadioScheduler
 
 scheduler = RadioScheduler()
-scheduler.test()
+scheduler.run()
