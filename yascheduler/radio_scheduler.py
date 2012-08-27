@@ -91,16 +91,15 @@ class RadioScheduler():
         self.lock = Lock()
 
     def test(self):
-        self.prepare_track(1, 0)
-        # thread = RedisListener(self)
-        # thread.start()
+        thread = RedisListener(self)
+        thread.start()
 
-        # step_count = 30
-        # step_index = 0
-        # while step_index < step_count:
-        #   print 'step %d' % step_index
-        #   time.sleep(2)
-        #   step_index += 1
+        step_count = 30
+        step_index = 0
+        while step_index < step_count:
+          print 'step %d' % step_index
+          time.sleep(2)
+          step_index += 1
 
 
     def run(self):
@@ -108,7 +107,6 @@ class RadioScheduler():
         self.last_step_time = datetime.now()
         while not quit:
             self.current_step_time = datetime.now()
-            print 'radio scheduler step'
 
             # find events between last step and now
             self.lock.acquire(True)
@@ -351,7 +349,7 @@ class RadioScheduler():
         if not playlist:
             return None
         track = self.get_random_song(playlist, play_time)
-        return
+        return track
 
 
     def get_song_in_show(self, radio_id, show_id, play_time):
