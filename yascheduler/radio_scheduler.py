@@ -39,8 +39,10 @@ class Track:
 class RedisListener(Thread):
     WAIT_TIME = 0.020  # seconds
 
-    TYPE_MESSAGE_START_RADIO = 'start_radio'
+    TYPE_MESSAGE_PLAY_RADIO = 'play_radio'
     TYPE_MESSAGE_STOP_RADIO = 'stop_radio'
+
+    REDIS_LISTEN_CHANNEL = 'audiostreamer'
 
     def __init__(self, radio_scheduler):
         Thread.__init__(self)
@@ -49,7 +51,7 @@ class RedisListener(Thread):
     def run(self):
         r = redis.StrictRedis(host=settings.REDIS_HOST, db=settings.REDIS_DB)
         r = r.pubsub()
-        channel = 'audiostreamer'
+        channel = self.REDIS_LISTEN_CHANNEL
         r.subscribe(channel)
         quit = False
         while not quit:
@@ -58,12 +60,10 @@ class RedisListener(Thread):
                     continue
                 data_str = message.get('data')
                 data = json.loads(data_str)
-                if data.get('type', None) == self.TYPE_MESSAGE_START_RADIO:
-                    radio_id = data.get('radio_id')
-                    self.radio_scheduler.start_radio(radio_id)
+                if data.get('type', None) == self.TYPE_MESSAGE_PLAY_RADIO:
+                    self.radio_scheduler.receive_play_radio_message(data)
                 elif data.get('type', None) == self.TYPE_MESSAGE_STOP_RADIO:
-                    radio_id = data.get('radio_id')
-                    self.radio_scheduler.stop_radio(radio_id)
+                    self.radio_scheduler.receive_stop_radio_message(data)
             time.sleep(self.WAIT_TIME)
 
 
@@ -75,12 +75,13 @@ class RadioScheduler():
     MESSAGE_TYPE_PLAY = 'play'
     MESSAGE_TYPE_RADIO_STARTED = 'radio_started'
     MESSAGE_TYPE_RADIO_STOPPED = 'radio_stopped'
+    MESSAGE_TYPE_RADIO_EXISTS = 'radio_exists'
 
     DEFAULT_SECONDS_TO_WAIT = 0.050  # 50 milliseconds
 
     SONG_PREPARE_DURATION = 5  # seconds
 
-    REDIS_PUBLISH_CHANNEL = 'yascheduler'
+    REDIS_PUBLISH_CHANNEL = 'yastream'
 
     def __init__(self):
         self.logger = Logger().log
@@ -122,7 +123,7 @@ class RadioScheduler():
             # if there are events for this radio, next track will be computed
             # else, restart the radio
             if event_count == 0:
-                self.start_radio(radio_id)
+                self.start_radio(radio_id, radio_state['master_streamer'])
 
         quit = False
         self.last_step_time = datetime.now()
@@ -186,27 +187,17 @@ class RadioScheduler():
         show_id = event.get('show_id', None)
 
         radio_state = self.radio_states.find_one({'radio_id': radio_id})
-        if radio_state is None:
-            radio_state = {'radio_id': radio_id,
-                    'song_id': song_id,
-                    'play_time': self.current_step_time,
-                    'show_id': show_id,
-                    'show_time': self.current_step_time if show_id is not None else None
-            }
-            # insert the radio state in mongoDB
-            self.radio_states.insert(radio_state, safe=True)
-        else:
-            radio_state['song_id'] = song_id
-            radio_state['play_time'] = self.current_step_time
-            if show_id is None:
-                radio_state['show_id'] = None
-                radio_state['show_time'] = None
-            elif ('show_id' not in radio_state) or (radio_state['show_id'] != show_id):
-                # it's a new show
-                radio_state['show_id'] = show_id
-                radio_state['show_time'] = self.current_step_time
-            # update the radio state in mongoDB
-            self.radio_states.update({'_id': radio_state['_id']}, radio_state, safe=True)
+        radio_state['song_id'] = song_id
+        radio_state['play_time'] = self.current_step_time
+        if show_id is None:
+            radio_state['show_id'] = None
+            radio_state['show_time'] = None
+        elif ('show_id' not in radio_state) or (radio_state['show_id'] != show_id):
+            # it's a new show
+            radio_state['show_id'] = show_id
+            radio_state['show_time'] = self.current_step_time
+        # update the radio state in mongoDB
+        self.radio_states.update({'_id': radio_state['_id']}, radio_state, safe=True)
 
         if song_id is not None:
             # a song is played (not a jingle)
@@ -237,7 +228,8 @@ class RadioScheduler():
         track_duration = track.duration
 
         # 1 - send message to streamer
-        self.send_prepare_track_message(radio_id, track_filename, delay_before_play)
+        dest_streamer = self.radio_states.find_one({'radio_id': radio_id})['master_streamer'] #  dest_streamer is the radio's master streamer
+        self.send_prepare_track_message(radio_id, track_filename, delay_before_play, dest_streamer)
 
         # 2 store 'track start' event
         event = {
@@ -401,38 +393,77 @@ class RadioScheduler():
     def get_time_jingle(self, radio_id):
         print 'get time jingle'
 
-    def send_prepare_track_message(self, radio_id, track_filename, delay):
+    def send_prepare_track_message(self, radio_id, track_filename, delay, dest_streamer):
         message = {'type': self.MESSAGE_TYPE_PLAY,
                     'radio_id': radio_id,
                     'filename': track_filename,
                     'delay': delay
         }
-        self.send_message(message)
+        self.send_message(message, dest_streamer)
 
-    def send_radio_started_message(self, radio_id):
+    def send_radio_started_message(self, radio_id, dest_streamer):
         message = {'type': self.MESSAGE_TYPE_RADIO_STARTED,
                     'radio_id': radio_id,
+                    'master_streamer': dest_streamer
         }
-        self.send_message(message)
+        self.send_message(message, dest_streamer)
 
-    def send_radio_stopped_message(self, radio_id):
-        message = {'type': self.MESSAGE_TYPE_RADIO_STOPPED,
+    #  send message to notify the streamer that the radio is already handled by another streamer: master_streamer
+    def send_radio_exists_message(self, radio_id, dest_streamer, master_streamer):
+        message = {'type': self.MESSAGE_TYPE_RADIO_EXISTS,
                     'radio_id': radio_id,
+                    'master_streamer': master_streamer
         }
-        self.send_message(message)
+        self.send_message(message, dest_streamer)
 
-    def send_message(self, message):
+    def send_radio_stopped_message(self, radio_id, dest_streamer):
+        message = {'type': self.MESSAGE_TYPE_RADIO_STOPPED,
+                    'radio_id': radio_id
+        }
+        self.send_message(message, dest_streamer)
+
+    def send_message(self, message, streamer=None):
         m = json.dumps(message)
-        self.redis.publish(self.REDIS_PUBLISH_CHANNEL, m)
+        channel = self.REDIS_PUBLISH_CHANNEL
+        if streamer is not None:
+            channel += '.%s' % (streamer)
+        self.redis.publish(channel, m)
 
-    def start_radio(self, radio_id):
-        self.send_radio_started_message(radio_id)
+    def receive_play_radio_message(self, data):
+        radio_id = data.get('radio_id', None)
+        streamer = data.get('streamer', None)
+        if radio_id is None or streamer is None:
+            return
+        radio_state = self.radio_states.find_one({'radio_id': radio_id})
+        print 'radio_state:'
+        print radio_state
+        if radio_state is None:
+            #  create radio
+            self.send_radio_started_message(radio_id, streamer)
+            self.start_radio(radio_id, streamer)
+        else:
+            # radio already exists
+            master_streamer = radio_state.get('master_streamer', None)
+            self.send_radio_exists_message(radio_id, streamer, master_streamer)
+
+    def receive_stop_radio_message(self, data):
+        radio_id = data.get('radio_id', None)
+        streamer = data.get('streamer', None)
+        self.stop_radio(radio_id)
+        self.send_radio_stopped_message(radio_id, streamer)
+
+    def start_radio(self, radio_id, master_streamer):
         self.clean_radio(radio_id)
+        # create radio state
+        radio_state = {'radio_id': radio_id,
+                        'master_streamer': master_streamer
+        }
+        self.radio_states.insert(radio_state, safe=True)
+        # prepare first track
         self.prepare_track(radio_id, 0)  # no delay
 
     def stop_radio(self, radio_id):
         self.clean_radio(radio_id)
-        self.send_radio_stopped_message(radio_id)
 
     def clean_radio_events(self, radio_id):
         self.lock.acquire(True)

@@ -3,6 +3,7 @@ from sqlalchemy import Column, Integer, String
 
 Base = declarative_base()
 
+
 class YasoundSong(Base):
     __tablename__ = 'yasound_song'
 

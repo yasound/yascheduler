@@ -1,9 +1,10 @@
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime
 from sqlalchemy import ForeignKey
-from sqlalchemy.orm import relationship, backref
+from sqlalchemy.orm import relationship
 
 Base = declarative_base()
+
 
 class Radio(Base):
     __tablename__ = 'yabase_radio'
@@ -16,6 +17,7 @@ class Radio(Base):
 
     def __str__(self):
         return '(%d) %s - %s' % (self.id, self.name, self.uuid)
+
 
 class Playlist(Base):
     __tablename__ = 'yabase_playlist'
@@ -30,6 +32,7 @@ class Playlist(Base):
     def __str__(self):
         return '(%d) %s - %s' % (self.id, self.name, self.radio.name)
 
+
 class SongMetadata(Base):
     __tablename__ = 'yabase_songmetadata'
 
@@ -43,12 +46,13 @@ class SongMetadata(Base):
     def __str__(self):
         return '(%d) %s - %s - %s' % (self.id, self.artist_name, self.album_name, self.name)
 
+
 class SongInstance(Base):
     __tablename__ = 'yabase_songinstance'
 
     id = Column(Integer, primary_key=True)
     play_count = Column(Integer)
-    last_play_time=  Column(DateTime)
+    last_play_time = Column(DateTime)
     order = Column(Integer)
     frequency = Column(Float)
     enabled = Column(Boolean)
