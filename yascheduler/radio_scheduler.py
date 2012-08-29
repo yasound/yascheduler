@@ -44,6 +44,7 @@ class RedisListener(Thread):
     TYPE_MESSAGE_USER_PERMISSION = 'user_permission'
     TYPE_MESSAGE_REGISTER_STREAMER = 'register_streamer'
     TYPE_MESSAGE_UNREGISTER_STREAMER = 'unregister_streamer'
+    TYPE_MESSAGE_PONG = 'pong'
 
     REDIS_LISTEN_CHANNEL = 'yascheduler'
 
@@ -73,6 +74,8 @@ class RedisListener(Thread):
                     self.radio_scheduler.receive_register_streamer_message(data)
                 elif data.get('type', None) == self.TYPE_MESSAGE_UNREGISTER_STREAMER:
                     self.radio_scheduler.receive_unregister_streamer_message(data)
+                elif data.get('type', None) == self.TYPE_MESSAGE_PONG:
+                    self.radio_scheduler.receive_pong_message(data)
             time.sleep(self.WAIT_TIME)
 
 class StreamerChecker(Thread):
@@ -532,6 +535,14 @@ class RadioScheduler():
             return
         self.unregister_streamer(streamer)
 
+    def receive_pong_message(self, data):
+        streamer_name = data.get('streamer', None)
+        if streamer_name is None:
+            return
+        streamer = self.streamers.find_one({'name': streamer_name})
+        streamer['ping_status'] = self.STREAMER_PING_STATUS_OK
+        self.streamers.update({'name': streamer_name}, streamer, safe=True)
+
     def is_hd_enabled(self, user_id):
         return False  #FIXME
 
@@ -583,7 +594,14 @@ class RadioScheduler():
         self.streamers.insert(streamer)
 
     def unregister_streamer(self, streamer_name):
+        # clean info for radios wich have this streamer as master streamer
+        radio_ids = self.radio_states.find({'master_streamer': streamer_name}).distinct('radio_id')
+        for radio_id in radio_ids:
+            self.clean_radio(radio_id)
+        # remove streamer from streamer list
         self.streamers.remove({'name': streamer_name})
+
+
 
     def ping_streamer(self, streamer_name):
         streamer = {'name': streamer_name,
