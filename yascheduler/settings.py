@@ -1,5 +1,5 @@
 from os.path import abspath, dirname
-import os
+import os, sys
 
 PROJECT_PATH = os.path.abspath(os.path.split(__file__)[0])
 
@@ -8,6 +8,18 @@ PRODUCTION_MODE = (APP_MODE == 'production')
 DEVELOPMENT_MODE = (APP_MODE == 'development')
 LOCAL_MODE = not (PRODUCTION_MODE or DEVELOPMENT_MODE)
 USE_MYSQL_IN_LOCAL_MODE = os.environ.get('USE_MYSQL', False)
+
+TEST_MODE = False
+for item in sys.argv:
+    if 'test' in item:
+        TEST_MODE = True
+        break
+
+if TEST_MODE:
+    LOCAL_MODE = False
+    DEVELOPMENT_MODE = False
+    PRODUCTION_MODE = False
+    USE_MYSQL_IN_LOCAL_MODE = False
 
 HOST = '0.0.0.0'
 PORT = 9000
@@ -44,6 +56,11 @@ elif DEVELOPMENT_MODE:
 elif PRODUCTION_MODE:
     yaapp_alchemy_engine = create_engine('mysql+mysqldb://root:root@127.0.0.1:8889/yaapp')
     yasound_alchemy_engine = create_engine('mysql+mysqldb://root:root@127.0.0.1:8889/yasound')
+elif TEST_MODE:
+    yaapp_db_path = os.path.join(PROJECT_PATH, 'db_test.dat')
+    yasound_db_path = os.path.join(PROJECT_PATH, 'yasound_db_test.dat')
+    yaapp_alchemy_engine = create_engine('sqlite+pysqlite:////%s' % yaapp_db_path)
+    yasound_alchemy_engine = create_engine('sqlite+pysqlite:////%s' % yasound_db_path)
 
 yaapp_session_maker = sessionmaker()
 yaapp_session_maker.configure(bind=yaapp_alchemy_engine)
@@ -51,12 +68,13 @@ yaapp_session_maker.configure(bind=yaapp_alchemy_engine)
 yasound_session_maker = sessionmaker()
 yasound_session_maker.configure(bind=yasound_alchemy_engine)
 
-
 # mongodb
 from pymongo.connection import Connection
 if PRODUCTION_MODE:
     MONGO_DB = Connection('mongodb://yasound:yiNOAi6P8eQC14L@yas-sql-01,yas-sql-02/yasound').yasound
 elif DEVELOPMENT_MODE:
     MONGO_DB = Connection('mongodb://yasound:yiNOAi6P8eQC14L@localhost/yasound').yasound
+elif TEST_MODE:
+    MONGO_DB = Connection().yasound_test
 else:
     MONGO_DB = Connection().yasound
