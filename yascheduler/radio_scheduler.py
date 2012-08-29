@@ -3,6 +3,7 @@ from logger import Logger
 from settings import yaapp_session_maker, yasound_session_maker
 from models.yaapp_alchemy_models import Radio, Playlist, SongInstance, SongMetadata
 from models.yasound_alchemy_models import YasoundSong
+from models.account_alchemy_models import User, UserProfile
 from datetime import datetime, timedelta, date
 import time
 from pymongo import ASCENDING, DESCENDING
@@ -45,6 +46,8 @@ class RedisListener(Thread):
     TYPE_MESSAGE_REGISTER_STREAMER = 'register_streamer'
     TYPE_MESSAGE_UNREGISTER_STREAMER = 'unregister_streamer'
     TYPE_MESSAGE_PONG = 'pong'
+    TYPE_MESSAGE_REGISTER_LISTENER = 'register_listener'
+    TYPE_MESSAGE_UNREGISTER_LISTENER = 'unregister_listener'
 
     REDIS_LISTEN_CHANNEL = 'yascheduler'
 
@@ -76,7 +79,12 @@ class RedisListener(Thread):
                     self.radio_scheduler.receive_unregister_streamer_message(data)
                 elif data.get('type', None) == self.TYPE_MESSAGE_PONG:
                     self.radio_scheduler.receive_pong_message(data)
+                elif data.get('type', None) == self.TYPE_MESSAGE_REGISTER_LISTENER:
+                    self.radio_scheduler.receive_register_listener_message(data)
+                elif data.get('type', None) == self.TYPE_MESSAGE_UNREGISTER_LISTENER:
+                    self.radio_scheduler.receive_unregister_listener_message(data)
             time.sleep(self.WAIT_TIME)
+
 
 class StreamerChecker(Thread):
     WAIT_TIME = 1  # seconds
@@ -99,7 +107,6 @@ class StreamerChecker(Thread):
 
             # sleep
             time.sleep(self.WAIT_TIME)
-
 
 
 class RadioScheduler():
@@ -150,8 +157,8 @@ class RadioScheduler():
         self.redis = redis.StrictRedis(host=settings.REDIS_HOST, db=settings.REDIS_DB)
 
     def test(self):
-        m = {'type': 'prout', 'name': 'blabla'}
-        self.send_message(m)
+        print self.is_hd_enabled(1)
+
 
     def run(self):
         # starts thread to listen to redis events
@@ -279,7 +286,7 @@ class RadioScheduler():
         offset = 0
 
         # 1 - send message to streamer
-        dest_streamer = self.radio_states.find_one({'radio_id': radio_id})['master_streamer'] #  dest_streamer is the radio's master streamer
+        dest_streamer = self.radio_states.find_one({'radio_id': radio_id})['master_streamer']  # dest_streamer is the radio's master streamer
         self.send_prepare_track_message(radio_id, track_filename, delay_before_play, offset, dest_streamer)
 
         # 2 store 'track start' event
@@ -535,6 +542,20 @@ class RadioScheduler():
             return
         self.unregister_streamer(streamer)
 
+    def receive_register_listener_message(self, data):
+        radio_uuid = data.get('radio_uuid', None)
+        user_id = data.get('user_id', None)
+        if radio_uuid is None or user_id is None:
+            return
+        self.register_listener(radio_uuid, user_id)
+
+    def receive_unregister_listener_message(self, data):
+        radio_uuid = data.get('radio_uuid', None)
+        user_id = data.get('user_id', None)
+        if radio_uuid is None or user_id is None:
+            return
+        self.unregister_listener(radio_uuid, user_id)
+
     def receive_pong_message(self, data):
         streamer_name = data.get('streamer', None)
         if streamer_name is None:
@@ -544,8 +565,8 @@ class RadioScheduler():
         self.streamers.update({'name': streamer_name}, streamer, safe=True)
 
     def is_hd_enabled(self, user_id):
-        return False  #FIXME
-
+        user = self.yaapp_alchemy_session.query(User).get(user_id)
+        return user.userprofile.hd_enabled
 
     def start_radio(self, radio_id, master_streamer):
         self.clean_radio(radio_id)
@@ -598,10 +619,21 @@ class RadioScheduler():
         radio_ids = self.radio_states.find({'master_streamer': streamer_name}).distinct('radio_id')
         for radio_id in radio_ids:
             self.clean_radio(radio_id)
+            self.radio_has_stopped(radio_id)
         # remove streamer from streamer list
         self.streamers.remove({'name': streamer_name})
 
+    def register_listener(radio_uuid, user_id):
+        #TODO: send 'start_listening' request
+        pass
 
+    def unregister_listener(radio_uuid, user_id):
+        #TODO: send 'stop_listening' request
+        pass
+
+    def radio_has_stopped(radio_id):
+        #TODO: start 'radio_has_stopped' request
+        pass
 
     def ping_streamer(self, streamer_name):
         streamer = {'name': streamer_name,
