@@ -127,6 +127,7 @@ class RadioScheduler():
     DEFAULT_SECONDS_TO_WAIT = 0.050  # 50 milliseconds
 
     SONG_PREPARE_DURATION = 5  # seconds
+    CROSSFADE_DURATION = 1  # seconds
 
     REDIS_PUBLISH_CHANNEL = 'yastream'
 
@@ -274,12 +275,13 @@ class RadioScheduler():
         if not radio_id:
             return
         delay_before_play = event.get('delay_before_play', self.SONG_PREPARE_DURATION)
-        self.prepare_track(radio_id, delay_before_play)
+        crossfade_duration = event.get('crossfade_duration', self.CROSSFADE_DURATION)
+        self.prepare_track(radio_id, delay_before_play, crossfade_duration)
 
     #   1 - get next track and send it to the streamer
     #   2 - create 'track start' event for this new track
     #   3 - create next 'track prepare' event
-    def prepare_track(self, radio_id, delay_before_play):
+    def prepare_track(self, radio_id, delay_before_play, crossfade_duration):
         track = self.get_next_track(radio_id, delay_before_play)
         track_filename = track.filename
         track_duration = track.duration
@@ -287,7 +289,7 @@ class RadioScheduler():
 
         # 1 - send message to streamer
         dest_streamer = self.radio_states.find_one({'radio_id': radio_id})['master_streamer']  # dest_streamer is the radio's master streamer
-        self.send_prepare_track_message(radio_id, track_filename, delay_before_play, offset, dest_streamer)
+        self.send_prepare_track_message(radio_id, track_filename, delay_before_play, offset, crossfade_duration, dest_streamer)
 
         # 2 store 'track start' event
         event = {
@@ -306,12 +308,14 @@ class RadioScheduler():
 
         # 3 - store next 'track prepare' event
         next_delay_before_play = self.SONG_PREPARE_DURATION
-        next_date = self.current_step_time + timedelta(seconds=delay_before_play) + timedelta(seconds=track_duration) - timedelta(seconds=next_delay_before_play)
+        crossfade_duration = self.CROSSFADE_DURATION
+        next_date = self.current_step_time + timedelta(seconds=delay_before_play) + timedelta(seconds=track_duration) - crossfade_duration - timedelta(seconds=next_delay_before_play)
         event = {
                 'type': self.EVENT_TYPE_NEW_TRACK_PREPARE,
                 'date': next_date,
                 'radio_id': radio_id,
-                'delay_before_play': next_delay_before_play
+                'delay_before_play': next_delay_before_play,
+                'crossfade_duration': crossfade_duration
         }
         self.lock.acquire(True)
         self.radio_events.insert(event, safe=True)
@@ -451,12 +455,13 @@ class RadioScheduler():
     def get_time_jingle(self, radio_id):
         print 'get time jingle'
 
-    def send_prepare_track_message(self, radio_id, track_filename, delay, offset, dest_streamer):
+    def send_prepare_track_message(self, radio_id, track_filename, delay, offset, crossfade_duration, dest_streamer):
         message = {'type': self.MESSAGE_TYPE_PLAY,
                     'radio_id': radio_id,
                     'filename': track_filename,
                     'delay': delay,
-                    'offset': offset
+                    'offset': offset,
+                    'crossfade_duration': crossfade_duration
         }
         self.send_message(message, dest_streamer)
 
@@ -576,7 +581,7 @@ class RadioScheduler():
         }
         self.radio_states.insert(radio_state, safe=True)
         # prepare first track
-        self.prepare_track(radio_id, 0)  # no delay
+        self.prepare_track(radio_id, 0, 0)  # no delay, no crossfade
 
     # return True if the radio existed
     def stop_radio(self, radio_id):

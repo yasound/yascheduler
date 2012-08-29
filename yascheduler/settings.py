@@ -57,8 +57,10 @@ elif PRODUCTION_MODE:
     yaapp_alchemy_engine = create_engine('mysql+mysqldb://root:root@127.0.0.1:8889/yaapp')
     yasound_alchemy_engine = create_engine('mysql+mysqldb://root:root@127.0.0.1:8889/yasound')
 elif TEST_MODE:
-    yaapp_db_path = os.path.join(PROJECT_PATH, 'db_test.dat')
-    yasound_db_path = os.path.join(PROJECT_PATH, 'yasound_db_test.dat')
+    yaapp_db_path = os.path.join(PROJECT_PATH, 'db_test_yascheduler.dat')
+    yasound_db_path = os.path.join(PROJECT_PATH, 'yasound_db_test_yascheduler.dat')
+    print yaapp_db_path
+    print yasound_db_path
     yaapp_alchemy_engine = create_engine('sqlite+pysqlite:////%s' % yaapp_db_path)
     yasound_alchemy_engine = create_engine('sqlite+pysqlite:////%s' % yasound_db_path)
 
