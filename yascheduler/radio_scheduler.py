@@ -12,6 +12,7 @@ import random
 from threading import Thread, Lock
 import redis
 import json
+import httplib
 
 
 class Track:
@@ -42,7 +43,7 @@ class RedisListener(Thread):
 
     TYPE_MESSAGE_PLAY_RADIO = 'play_radio'
     TYPE_MESSAGE_STOP_RADIO = 'stop_radio'
-    TYPE_MESSAGE_USER_PERMISSION = 'user_permission'
+    TYPE_MESSAGE_USER_AUTHENTICATION = 'user_authentication'
     TYPE_MESSAGE_REGISTER_STREAMER = 'register_streamer'
     TYPE_MESSAGE_UNREGISTER_STREAMER = 'unregister_streamer'
     TYPE_MESSAGE_PONG = 'pong'
@@ -71,8 +72,8 @@ class RedisListener(Thread):
                     self.radio_scheduler.receive_play_radio_message(data)
                 elif data.get('type', None) == self.TYPE_MESSAGE_STOP_RADIO:
                     self.radio_scheduler.receive_stop_radio_message(data)
-                elif data.get('type', None) == self.TYPE_MESSAGE_USER_PERMISSION:
-                    self.radio_scheduler.receive_user_permission_message(data)
+                elif data.get('type', None) == self.TYPE_MESSAGE_USER_AUTHENTICATION:
+                    self.radio_scheduler.receive_user_authentication_message(data)
                 elif data.get('type', None) == self.TYPE_MESSAGE_REGISTER_STREAMER:
                     self.radio_scheduler.receive_register_streamer_message(data)
                 elif data.get('type', None) == self.TYPE_MESSAGE_UNREGISTER_STREAMER:
@@ -118,7 +119,7 @@ class RadioScheduler():
     MESSAGE_TYPE_RADIO_STARTED = 'radio_started'
     MESSAGE_TYPE_RADIO_STOPPED = 'radio_stopped'
     MESSAGE_TYPE_RADIO_EXISTS = 'radio_exists'
-    MESSAGE_TYPE_USER_PERMISSION = 'user_permission'
+    MESSAGE_TYPE_USER_AUTHENTICATION = 'user_authentication'
     MESSAGE_TYPE_PING = 'ping'
 
     STREAMER_PING_STATUS_OK = 'ok'
@@ -264,7 +265,7 @@ class RadioScheduler():
             self.yaapp_alchemy_session.query(SongInstance).filter(SongInstance.id == song_id).update({SongInstance.play_count: SongInstance.play_count + 1, SongInstance.last_play_time: self.current_step_time})
             self.yaapp_alchemy_session.query(Radio).filter(Radio.id == radio_id).update({Radio.current_song_id: song_id})
             self.yaapp_alchemy_session.commit()
-            #
+            #6lo
             #TODO: report song as played => MONGO_DB.reports
             #
 
@@ -309,7 +310,7 @@ class RadioScheduler():
         # 3 - store next 'track prepare' event
         next_delay_before_play = self.SONG_PREPARE_DURATION
         crossfade_duration = self.CROSSFADE_DURATION
-        next_date = self.current_step_time + timedelta(seconds=delay_before_play) + timedelta(seconds=track_duration) - crossfade_duration - timedelta(seconds=next_delay_before_play)
+        next_date = self.current_step_time + timedelta(seconds=delay_before_play) + timedelta(seconds=track_duration) - timedelta(seconds=crossfade_duration) - timedelta(seconds=next_delay_before_play)
         event = {
                 'type': self.EVENT_TYPE_NEW_TRACK_PREPARE,
                 'date': next_date,
@@ -486,13 +487,6 @@ class RadioScheduler():
         }
         self.send_message(message, dest_streamer)
 
-    def send_user_permission_message(self, user_id, hd_enabled, dest_streamer):
-        message = {'type': self.MESSAGE_TYPE_USER_PERMISSION,
-                    'user_id': user_id,
-                    'hd': hd_enabled
-        }
-        self.send_message(message, dest_streamer)
-
     def send_ping_message(self, dest_streamer):
         message = {'type': self.MESSAGE_TYPE_PING
         }
@@ -527,13 +521,40 @@ class RadioScheduler():
         if radio_existed:
             self.send_radio_stopped_message(radio_id, streamer)
 
-    def receive_user_permission_message(self, data):
-        user_id = data.get('user_id', None)
+    def receive_user_authentication_message(self, data):
         streamer = data.get('streamer', None)
-        if user_id is None or streamer is None:
+        if streamer is None:
             return
-        hd_enabled = self.is_hd_enabled(user_id)
-        self.send_user_permission_message(user_id, hd_enabled, streamer)
+        auth_token = data.get('auth_token', None)
+        if auth_token is not None:
+            #TODO
+            user_id = None  #FIXME
+            response = {'auth_token': auth_token,
+                        'user_id': user_id
+            }
+        else:
+            username = data.get('username', None)
+            api_key = data.get('api_key', None)
+            if username is not None and api_key is not None:
+                user = self.yaapp_alchemy_session.query(User).filter(User.username == username).first()
+                user_id = None
+                if user.api_key.key == api_key:
+                    user_id = user.id
+                response = {'username': username,
+                            'api_key': api_key,
+                            'user_id': user_id
+                }
+            else:
+                response = {'user_id': None}
+
+        if response['user_id'] is not None:
+          hd_enabled = self.is_hd_enabled(user_id)
+        else:
+          hd_enabled = False
+        response['hd'] = hd_enabled
+        response['type'] = self.MESSAGE_TYPE_USER_AUTHENTICATION
+        self.send_message(response, streamer)
+        return response
 
     def receive_register_streamer_message(self, data):
         streamer = data.get('streamer', None)
@@ -570,6 +591,8 @@ class RadioScheduler():
         self.streamers.update({'name': streamer_name}, streamer, safe=True)
 
     def is_hd_enabled(self, user_id):
+        if user_id is None:
+            return False
         user = self.yaapp_alchemy_session.query(User).get(user_id)
         return user.userprofile.hd_enabled
 
@@ -630,15 +653,30 @@ class RadioScheduler():
 
     def register_listener(radio_uuid, user_id):
         #TODO: send 'start_listening' request
-        pass
+        if settings.YASOUND_SERVER_SECURE_HTTP:
+            connection = httplib.HTTPSConnection(settings.YASOUND_SERVER)
+        else:
+            connection = httplib.HTTPConnection(settings.YASOUND_SERVER)
+        url = '/api/v1/radio/'  #FIXME
+        # connection.request('POST', url)
 
     def unregister_listener(radio_uuid, user_id):
         #TODO: send 'stop_listening' request
-        pass
+        if settings.YASOUND_SERVER_SECURE_HTTP:
+            connection = httplib.HTTPSConnection(settings.YASOUND_SERVER)
+        else:
+            connection = httplib.HTTPConnection(settings.YASOUND_SERVER)
+        url = '/api/v1/radio/'  #FIXME
+        # connection.request('POST', url)
 
     def radio_has_stopped(radio_id):
         #TODO: start 'radio_has_stopped' request
-        pass
+        if settings.YASOUND_SERVER_SECURE_HTTP:
+            connection = httplib.HTTPSConnection(settings.YASOUND_SERVER)
+        else:
+            connection = httplib.HTTPConnection(settings.YASOUND_SERVER)
+        url = '/api/v1/radio/'  #FIXME
+        # connection.request('POST', url)
 
     def ping_streamer(self, streamer_name):
         streamer = {'name': streamer_name,
