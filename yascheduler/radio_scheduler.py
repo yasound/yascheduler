@@ -526,16 +526,24 @@ class RadioScheduler():
         if streamer is None:
             return
         auth_token = data.get('auth_token', None)
-        if auth_token is not None:
-            #TODO
-            user_id = None  #FIXME
+        if auth_token is not None:  # auth with token given by yaapp and passed to the streamer by the client
+            if settings.YASOUND_SERVER_SECURE_HTTP:
+                connection = httplib.HTTPSConnection(settings.YASOUND_SERVER)
+            else:
+                connection = httplib.HTTPConnection(settings.YASOUND_SERVER)
+            # ask yaapp if this token is valid and the user associated
+            url = '/api/v1/check_streamer_auth_token/%s' % (auth_token)
+            connection.request('GET', url)
+            response = connection.getresponse().read()
+            data = json.loads(response)
+            user_id = data.get('user_id', None)
             response = {'auth_token': auth_token,
                         'user_id': user_id
             }
         else:
             username = data.get('username', None)
             api_key = data.get('api_key', None)
-            if username is not None and api_key is not None:
+            if username is not None and api_key is not None:  # auth with username and api_key (for old clients compatibility)
                 user = self.yaapp_alchemy_session.query(User).filter(User.username == username).first()
                 user_id = None
                 if user.api_key.key == api_key:
@@ -544,7 +552,7 @@ class RadioScheduler():
                             'api_key': api_key,
                             'user_id': user_id
                 }
-            else:
+            else:  # no auth : anonymous client
                 response = {'user_id': None}
 
         if response['user_id'] is not None:
@@ -571,14 +579,14 @@ class RadioScheduler():
     def receive_register_listener_message(self, data):
         radio_uuid = data.get('radio_uuid', None)
         user_id = data.get('user_id', None)
-        if radio_uuid is None or user_id is None:
+        if radio_uuid is None:
             return
         self.register_listener(radio_uuid, user_id)
 
     def receive_unregister_listener_message(self, data):
         radio_uuid = data.get('radio_uuid', None)
         user_id = data.get('user_id', None)
-        if radio_uuid is None or user_id is None:
+        if radio_uuid is None:
             return
         self.unregister_listener(radio_uuid, user_id)
 
@@ -652,13 +660,18 @@ class RadioScheduler():
         self.streamers.remove({'name': streamer_name})
 
     def register_listener(radio_uuid, user_id):
-        #TODO: send 'start_listening' request
         if settings.YASOUND_SERVER_SECURE_HTTP:
             connection = httplib.HTTPSConnection(settings.YASOUND_SERVER)
         else:
             connection = httplib.HTTPConnection(settings.YASOUND_SERVER)
-        url = '/api/v1/radio/'  #FIXME
-        # connection.request('POST', url)
+        url = '/api/v1/radio/%s/start_listening/' % radio_uuid
+        if user_id is not None:
+            user = self.yaapp_alchemy_session.query(User).get(user_id)
+            username =  user.username
+            api_key = user.api_key.key
+            url += '?username=%s&api_key=%s' % (username, api_key)
+        connection.request('POST', url)
+        connection.getresponse()
 
     def unregister_listener(radio_uuid, user_id):
         #TODO: send 'stop_listening' request
@@ -666,8 +679,14 @@ class RadioScheduler():
             connection = httplib.HTTPSConnection(settings.YASOUND_SERVER)
         else:
             connection = httplib.HTTPConnection(settings.YASOUND_SERVER)
-        url = '/api/v1/radio/'  #FIXME
-        # connection.request('POST', url)
+        url = '/api/v1/radio/%s/stop_listening/' % radio_uuid
+        if user_id is not None:
+            user = self.yaapp_alchemy_session.query(User).get(user_id)
+            username =  user.username
+            api_key = user.api_key.key
+            url += '?username=%s&api_key=%s' % (username, api_key)
+        connection.request('POST', url)
+        connection.getresponse()
 
     def radio_has_stopped(radio_id):
         #TODO: start 'radio_has_stopped' request
