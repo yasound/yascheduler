@@ -52,6 +52,9 @@ class Test(TestCase):
         api_key = self.yaapp_session.query(ApiKey).first()
         self.assertEqual(api_key.user_id, u.id)
 
+        self.yaapp_session.commit()
+        self.yasound_session.commit()
+
     def test_authentication(self):
         u = User('mat')
         self.yaapp_session.add(u)
@@ -82,3 +85,6 @@ class Test(TestCase):
         resp = self.scheduler.receive_user_authentication_message({'streamer': 'streamer'})
         self.assertIsNotNone(resp)
         self.assertIsNone(resp['user_id'])
+
+        self.yaapp_session.commit()
+        self.yasound_session.commit()
