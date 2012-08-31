@@ -67,8 +67,6 @@ elif TEST_MODE:
     YASOUND_SERVER_SECURE_HTTP = False
     yaapp_db_path = os.path.join(PROJECT_PATH, 'db_test_yascheduler.dat')
     yasound_db_path = os.path.join(PROJECT_PATH, 'yasound_db_test_yascheduler.dat')
-    print yaapp_db_path
-    print yasound_db_path
     yaapp_alchemy_engine = create_engine('sqlite+pysqlite:////%s' % yaapp_db_path)
     yasound_alchemy_engine = create_engine('sqlite+pysqlite:////%s' % yasound_db_path)
 
