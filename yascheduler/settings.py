@@ -86,3 +86,5 @@ elif TEST_MODE:
     MONGO_DB = Connection().yasound_test
 else:
     MONGO_DB = Connection().yasound
+
+SCHEDULER_KEY = 'pibs9wn20fnq-1nfk8762ncuwecydgso'

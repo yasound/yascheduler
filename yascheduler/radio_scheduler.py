@@ -272,14 +272,13 @@ class RadioScheduler():
 
         if song_id is not None:
             # a song is played (not a jingle)
-            # 1 - update SongInstance status: play_count and last_play_time
-            # 2 - update Radio status:  current_song
-            self.yaapp_alchemy_session.query(SongInstance).filter(SongInstance.id == song_id).update({SongInstance.play_count: SongInstance.play_count + 1, SongInstance.last_play_time: self.current_step_time})
-            self.yaapp_alchemy_session.query(Radio).filter(Radio.uuid == radio_uuid).update({Radio.current_song_id: song_id})
-            self.yaapp_alchemy_session.commit()
-            #6lo
-            #TODO: report song as played => MONGO_DB.reports
-            #
+            # notify yaapp
+            if settings.YASOUND_SERVER_SECURE_HTTP:
+                connection = httplib.HTTPSConnection(settings.YASOUND_SERVER)
+            else:
+                connection = httplib.HTTPConnection(settings.YASOUND_SERVER)
+            url = '/api/v1/radio/%s/song/%d/played/?key=%s' % (radio_uuid, song_id, settings.SCHEDULER_KEY)
+            connection.request('POST', url)
 
     # new 'track prepare' event has been received:
     def handle_new_track_prepare(self, event):
@@ -682,12 +681,18 @@ class RadioScheduler():
             connection = httplib.HTTPSConnection(settings.YASOUND_SERVER)
         else:
             connection = httplib.HTTPConnection(settings.YASOUND_SERVER)
-        url = '/api/v1/radio/%s/start_listening/' % radio_uuid
+
+        # if user_id is not None:
+        #     user = self.yaapp_alchemy_session.query(User).get(user_id)
+        #     username =  user.username
+        #     api_key = user.api_key.key
+        #     url += '?username=%s&api_key=%s' % (username, api_key)
+        url_params = {'key': settings.SCHEDULER_KEY}
         if user_id is not None:
             user = self.yaapp_alchemy_session.query(User).get(user_id)
-            username =  user.username
-            api_key = user.api_key.key
-            url += '?username=%s&api_key=%s' % (username, api_key)
+            url_params['username'] = user.username
+            url_params['api_key'] = user.api_key.key
+        url = '/api/v1/radio/%s/start_listening/?%s' % (radio_uuid, urllib.urlencode(url_params))
         connection.request('POST', url)
         connection.getresponse()
 
@@ -719,7 +724,9 @@ class RadioScheduler():
             connection = httplib.HTTPSConnection(settings.YASOUND_SERVER)
         else:
             connection = httplib.HTTPConnection(settings.YASOUND_SERVER)
-        url_params = {'listening_duration': seconds}
+        url_params = {'listening_duration': seconds,
+                        'key': settings.SCHEDULER_KEY
+        }
         if user_id is not None:
             user = self.yaapp_alchemy_session.query(User).get(user_id)
             url_params['username'] = user.username
@@ -748,7 +755,10 @@ class RadioScheduler():
             connection = httplib.HTTPSConnection(settings.YASOUND_SERVER)
         else:
             connection = httplib.HTTPConnection(settings.YASOUND_SERVER)
-        url = '/api/v1/radio/%s/stopped/?listening_duration=%d' % (radio_uuid, total_seconds)
+            url_params = {'listening_duration': total_seconds,
+                            'key': settings.SCHEDULER_KEY
+            }
+        url = '/api/v1/radio/%s/stopped/?%s' % (radio_uuid, urllib.urlencode(url_params))
         connection.request('POST', url)
         connection.getresponse()
 
