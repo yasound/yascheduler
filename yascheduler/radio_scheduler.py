@@ -12,8 +12,7 @@ import random
 from threading import Thread, Lock
 import redis
 import json
-import httplib
-import urllib
+import requests
 
 class Track:
     def __init__(self, filename, duration, song=None, show=None):
@@ -273,12 +272,9 @@ class RadioScheduler():
         if song_id is not None:
             # a song is played (not a jingle)
             # notify yaapp
-            if settings.YASOUND_SERVER_SECURE_HTTP:
-                connection = httplib.HTTPSConnection(settings.YASOUND_SERVER)
-            else:
-                connection = httplib.HTTPConnection(settings.YASOUND_SERVER)
-            url = '/api/v1/radio/%s/song/%d/played/?key=%s' % (radio_uuid, song_id, settings.SCHEDULER_KEY)
-            connection.request('POST', url)
+
+            url = settings.YASOUND_SERVER + '/api/v1/radio/%s/song/%d/played/' % (radio_uuid, song_id)
+            requests.post(url, params={'key': settings.SCHEDULER_KEY})
 
     def handle_new_track_prepare(self, event):
         """
@@ -563,15 +559,10 @@ class RadioScheduler():
             return
         auth_token = data.get('auth_token', None)
         if auth_token is not None:  # auth with token given by yaapp and passed to the streamer by the client
-            if settings.YASOUND_SERVER_SECURE_HTTP:
-                connection = httplib.HTTPSConnection(settings.YASOUND_SERVER)
-            else:
-                connection = httplib.HTTPConnection(settings.YASOUND_SERVER)
             # ask yaapp if this token is valid and the user associated
             url = '/api/v1/check_streamer_auth_token/%s' % (auth_token)
-            connection.request('GET', url)
-            response = connection.getresponse().read()
-            data = json.loads(response)
+            r = requests.get(url)
+            data = r.json
             user_id = data.get('user_id', None)
             response = {'auth_token': auth_token,
                         'user_id': user_id
@@ -724,24 +715,13 @@ class RadioScheduler():
         and notify yaapp that a client (connected user or anonymous) started listening to a radio
         """
         # send 'user started listening' request
-        if settings.YASOUND_SERVER_SECURE_HTTP:
-            connection = httplib.HTTPSConnection(settings.YASOUND_SERVER)
-        else:
-            connection = httplib.HTTPConnection(settings.YASOUND_SERVER)
-
-        # if user_id is not None:
-        #     user = self.yaapp_alchemy_session.query(User).get(user_id)
-        #     username =  user.username
-        #     api_key = user.api_key.key
-        #     url += '?username=%s&api_key=%s' % (username, api_key)
         url_params = {'key': settings.SCHEDULER_KEY}
         if user_id is not None:
             user = self.yaapp_alchemy_session.query(User).get(user_id)
             url_params['username'] = user.username
             url_params['api_key'] = user.api_key.key
-        url = '/api/v1/radio/%s/start_listening/?%s' % (radio_uuid, urllib.urlencode(url_params))
-        connection.request('POST', url)
-        connection.getresponse()
+        url = settings.YASOUND_SERVER + '/api/v1/radio/%s/start_listening/' % (radio_uuid)
+        requests.post(url, params=url_params)
 
         # store listener
         listener = {'session_id': session_id,
@@ -773,20 +753,13 @@ class RadioScheduler():
         self.listeners.remove(query)
 
         # send 'user stopped listening' request
-        if settings.YASOUND_SERVER_SECURE_HTTP:
-            connection = httplib.HTTPSConnection(settings.YASOUND_SERVER)
-        else:
-            connection = httplib.HTTPConnection(settings.YASOUND_SERVER)
-        url_params = {'listening_duration': seconds,
-                        'key': settings.SCHEDULER_KEY
-        }
+        url_params = {'key': settings.SCHEDULER_KEY}
         if user_id is not None:
             user = self.yaapp_alchemy_session.query(User).get(user_id)
             url_params['username'] = user.username
             url_params['api_key'] = user.api_key.key
-        url = '/api/v1/radio/%s/stop_listening/?%s' % (radio_uuid, urllib.urlencode(url_params))
-        connection.request('POST', url)
-        connection.getresponse()
+        url = settings.YASOUND_SERVER + '/api/v1/radio/%s/stop_listening/' % (radio_uuid,)
+        requests.post(url, params=url_params)
 
         return (listener, seconds)  # for test purpose
 
@@ -809,16 +782,11 @@ class RadioScheduler():
         self.listeners.remove(query)
 
         # send 'radio stopped' request
-        if settings.YASOUND_SERVER_SECURE_HTTP:
-            connection = httplib.HTTPSConnection(settings.YASOUND_SERVER)
-        else:
-            connection = httplib.HTTPConnection(settings.YASOUND_SERVER)
-            url_params = {'listening_duration': total_seconds,
-                            'key': settings.SCHEDULER_KEY
-            }
-        url = '/api/v1/radio/%s/stopped/?%s' % (radio_uuid, urllib.urlencode(url_params))
-        connection.request('POST', url)
-        connection.getresponse()
+        url_params = {'listening_duration': total_seconds,
+                        'key': settings.SCHEDULER_KEY
+        }
+        url = settings.YASOUND_SERVER + '/api/v1/radio/%s/stopped/' % (radio_uuid)
+        request.post(url, url_params)
 
     def ping_streamer(self, streamer_name):
         """

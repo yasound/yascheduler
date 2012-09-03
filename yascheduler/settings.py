@@ -42,8 +42,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 if LOCAL_MODE:
-    YASOUND_SERVER = '127.0.0.1:8000'
-    YASOUND_SERVER_SECURE_HTTP = False
+    YASOUND_SERVER = 'http://127.0.0.1:8000'
     if not USE_MYSQL_IN_LOCAL_MODE:
         yaapp_db_path = os.path.join(PROJECT_PATH, 'db.dat')
         yasound_db_path = os.path.join(PROJECT_PATH, 'yasound_db.dat')
@@ -53,18 +52,15 @@ if LOCAL_MODE:
         yaapp_alchemy_engine = create_engine('mysql+mysqldb://root:root@127.0.0.1:8889/yaapp')
         yasound_alchemy_engine = create_engine('mysql+mysqldb://root:root@127.0.0.1:8889/yasound')
 elif DEVELOPMENT_MODE:
-    YASOUND_SERVER = 'dev.yasound.com'
-    YASOUND_SERVER_SECURE_HTTP = True
+    YASOUND_SERVER = 'https://dev.yasound.com'
     yaapp_alchemy_engine = create_engine('mysql+mysqldb://root:root@127.0.0.1:8889/yaapp')
     yasound_alchemy_engine = create_engine('mysql+mysqldb://root:root@127.0.0.1:8889/yasound')
 elif PRODUCTION_MODE:
-    YASOUND_SERVER = 'api.yasound.com'
-    YASOUND_SERVER_SECURE_HTTP = True
+    YASOUND_SERVER = 'https://api.yasound.com'
     yaapp_alchemy_engine = create_engine('mysql+mysqldb://root:root@127.0.0.1:8889/yaapp')
     yasound_alchemy_engine = create_engine('mysql+mysqldb://root:root@127.0.0.1:8889/yasound')
 elif TEST_MODE:
-    YASOUND_SERVER = '127.0.0.1:8000'
-    YASOUND_SERVER_SECURE_HTTP = False
+    YASOUND_SERVER = 'http://127.0.0.1:8000'
     yaapp_db_path = os.path.join(PROJECT_PATH, 'db_test_yascheduler.dat')
     yasound_db_path = os.path.join(PROJECT_PATH, 'yasound_db_test_yascheduler.dat')
     yaapp_alchemy_engine = create_engine('sqlite+pysqlite:////%s' % yaapp_db_path)
