@@ -302,7 +302,7 @@ class RadioScheduler():
 
         # 1 - send message to streamer
         dest_streamer = self.radio_states.find_one({'radio_uuid': radio_uuid})['master_streamer']  # dest_streamer is the radio's master streamer
-        self.send_prepare_track_message(radio_uuid, track_filename, delay_before_play, offset, crossfade_duration, dest_streamer)
+        message = self.send_prepare_track_message(radio_uuid, track_filename, delay_before_play, offset, crossfade_duration, dest_streamer)
 
         # 2 store 'track start' event
         event = {
@@ -333,6 +333,8 @@ class RadioScheduler():
         self.lock.acquire(True)
         self.radio_events.insert(event, safe=True)
         self.lock.release()
+
+        return message  # for test purpose
 
     def get_current_show(self, shows, play_time):
         """
@@ -482,13 +484,14 @@ class RadioScheduler():
                     'crossfade_duration': crossfade_duration
         }
         self.send_message(message, dest_streamer)
+        return message
 
     def send_radio_started_message(self, radio_uuid, dest_streamer):
         message = {'type': self.MESSAGE_TYPE_RADIO_STARTED,
-                    'radio_uuid': radio_uuid,
-                    'master_streamer': dest_streamer
+                    'radio_uuid': radio_uuid
         }
         self.send_message(message, dest_streamer)
+        return message  # for test purpose
 
     def send_radio_exists_message(self, radio_uuid, dest_streamer, master_streamer):
         """
@@ -499,12 +502,14 @@ class RadioScheduler():
                     'master_streamer': master_streamer
         }
         self.send_message(message, dest_streamer)
+        return message
 
     def send_radio_stopped_message(self, radio_uuid, dest_streamer):
         message = {'type': self.MESSAGE_TYPE_RADIO_STOPPED,
                     'radio_uuid': radio_uuid
         }
         self.send_message(message, dest_streamer)
+        return message
 
     def send_ping_message(self, dest_streamer):
         message = {'type': self.MESSAGE_TYPE_PING
@@ -526,19 +531,22 @@ class RadioScheduler():
         radio_state = self.radio_states.find_one({'radio_uuid': radio_uuid})
         if radio_state is None:
             #  create radio
-            self.send_radio_started_message(radio_uuid, streamer)
+            message = self.send_radio_started_message(radio_uuid, streamer)
             self.start_radio(radio_uuid, streamer)
         else:
             # radio already exists
             master_streamer = radio_state.get('master_streamer', None)
-            self.send_radio_exists_message(radio_uuid, streamer, master_streamer)
+            message = self.send_radio_exists_message(radio_uuid, streamer, master_streamer)
+        return message
 
     def receive_stop_radio_message(self, data):
         radio_uuid = data.get('radio_uuid', None)
         streamer = data.get('streamer', None)
         radio_existed = self.stop_radio(radio_uuid)
+        message = None
         if radio_existed:
-            self.send_radio_stopped_message(radio_uuid, streamer)
+            message = self.send_radio_stopped_message(radio_uuid, streamer)
+        return message
 
     def receive_user_authentication_message(self, data):
         """

@@ -31,7 +31,7 @@ Messages are formatted using json:
         'param_name_3': param_value_3,  
     }`  
 
-##_- messages from the streamer:_
+##_- messages from the streamer (to yascheduler):_
 
 
 ***
@@ -136,9 +136,78 @@ _params_:
 `session_id` : same listening session id as the one passed to `register_client`  
 
 
+##_- messages from yascheduler (to the streamer):_
 
 
+***
+__radio start__  
+sent when a radio starts  
+
+_type_ : 'radio_started'  
+
+_params_:  
+`radio__uuid` : the radio uuid  
 
 
+***
+__radio exists__  
+sent when the streamer asks for a radio which is already handled by another streamer,   
+the identifier of the master streamer is sent so that the streamer can create a proxy.  
 
+_type_ : 'radio_exists'  
+
+_params_:  
+`radio__uuid` : the radio uuid  
+`master_streamer` : identifier of the master streamer  
+
+
+***
+__radio stop__  
+sent when a radio stops  
+
+_type_ : 'radio_stopped'  
+
+_params_:  
+`radio__uuid` : the radio uuid 
+
+***
+__play__  
+sent when a radio has to play an audio file  
+
+_type_ : 'play'  
+
+_params_:  
+`radio__uuid` : the radio uuid  
+`filename` : name of the audio file to play  
+`delay` : delay before play (in seconds)  
+`offset` : offset in file where to start playing  
+`crossfade_duration` : duration of the crossfade with previous file (in seconds)  
+
+
+***
+__user authentication__  
+sent in response to a 'user authentication' request from the streamer   
+
+_type_ : 'user_authentication'  
+
+_params_:  
+`user_id` : id of the authenticated user if exists, can be None  
+'hd' : boolean flag representing HD permission for the authenticated user  
+
+and authentication params passed in 'user_authentication' request (see 'user_authentication' message in 'messages from the streamer' section):  
+`auth_token` : authentication token  
+or  
+`username` : username  
+`api_key` : api key  
+
+
+***
+__ping streamer__  
+sent to check that the streamer is still alive,  
+the streamer must reply with a 'pong' message (see 'messages from the streamer' section)  
+
+_type_ : 'ping'  
+
+_params_:  
+none   
 
