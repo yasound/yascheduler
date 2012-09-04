@@ -190,7 +190,7 @@ class RadioScheduler():
             if radio_uuid is None:
                 continue
             event_count = self.radio_events.find({'radio_uuid': radio_uuid, 'date': {'$gte': datetime.now()}}).count()
-            self.logger.info('radio %d nb events %d' % (radio_uuid, event_count))
+            self.logger.info('radio %s nb events %d' % (radio_uuid, event_count))
             # if there are events for this radio, next track will be computed
             # else, restart the radio
             if event_count == 0:
@@ -443,7 +443,7 @@ class RadioScheduler():
     def get_next_track(self, radio_uuid, delay_before_play):
         play_time = self.current_step_time + timedelta(seconds=delay_before_play)
 
-        radio = self.yaapp_alchemy_session.query(Radio).filter(Radio.uuid == radio_uuid).first
+        radio = self.yaapp_alchemy_session.query(Radio).filter(Radio.uuid == radio_uuid).first()
 
         track = None
         if track is None:  # 1 check if we have to play an inter-song jingle
@@ -543,7 +543,7 @@ class RadioScheduler():
         return track
 
     def get_radio_jingle_track(self, radio_uuid):
-        self.logger.info('get radio jingle track')
+        # self.logger.info('get radio jingle track')
         return None  #TODO
 
     def get_time_jingle_track(self, radio_uuid, time):
