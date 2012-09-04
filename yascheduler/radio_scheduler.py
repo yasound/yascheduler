@@ -404,10 +404,13 @@ class RadioScheduler():
         message = self.play_track(radio_uuid, track, delay_before_play, offset, crossfade_duration)
         return message  # for test purpose
 
-    def get_current_show(self, shows, play_time):
+    def get_current_show(self, radio, play_time):
         """
         get current show if exists
         """
+        playlists = self.yaapp_alchemy_session.query(Playlist).filter(Playlist.radio_id == radio.id)
+        playlist_ids = [x[0] for x in playlists.values(Playlist.id)]
+        shows = self.shows.find({'playlist_id': {'$in': playlist_ids}, 'enabled': True}).sort([('time', DESCENDING)])
         current = None
         week_days = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN']
         for s in shows:
@@ -441,18 +444,20 @@ class RadioScheduler():
         play_time = self.current_step_time + timedelta(seconds=delay_before_play)
 
         radio = self.yaapp_alchemy_session.query(Radio).filter(Radio.uuid == radio_uuid).first
-        playlists = self.yaapp_alchemy_session.query(Playlist).filter(Playlist.radio_id == radio.id)
-        playlist_ids = [x[0] for x in playlists.values(Playlist.id)]
-        shows = self.shows.find({'playlist_id': {'$in': playlist_ids}, 'enabled': True}).sort([('time', DESCENDING)])
-        # check if one of those shows is currently 'on air'
-        show_current = self.get_current_show(shows, play_time)
 
-        #FIXME: handle all cases (jingles, time jingles)
         track = None
-        if show_current:
-            track = self.get_song_in_show(radio_uuid, show_current['_id'], play_time)
-        if track is None:
+        if track is None:  # 1 check if we have to play an inter-song jingle
+            track = self.get_radio_jingle_track(radio_uuid)
+
+        if track is None:  # 2 check if we must be playing a show
+            # check if one of the radio shows is currently 'on air'
+            show_current = self.get_current_show(radio, play_time)
+            if show_current:
+                track = self.get_song_in_show(radio_uuid, show_current['_id'], play_time)
+
+        if track is None:  # 3 choose a song in the default playlist
             track = self.get_song_default(radio.id, play_time)
+
         return track
 
     def get_random_song(self, playlist, play_time):
