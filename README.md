@@ -146,7 +146,7 @@ sent when a radio starts
 _type_ : 'radio_started'  
 
 _params_:  
-`radio__uuid` : the radio uuid  
+`radio_uuid` : the radio uuid  
 
 
 ***
@@ -157,7 +157,7 @@ the identifier of the master streamer is sent so that the streamer can create a 
 _type_ : 'radio_exists'  
 
 _params_:  
-`radio__uuid` : the radio uuid  
+`radio_uuid` : the radio uuid  
 `master_streamer` : identifier of the master streamer  
 
 
@@ -168,7 +168,7 @@ sent when a radio stops
 _type_ : 'radio_stopped'  
 
 _params_:  
-`radio__uuid` : the radio uuid 
+`radio_uuid` : the radio uuid 
 
 ***
 __play__  
@@ -177,7 +177,7 @@ sent when a radio has to play an audio file
 _type_ : 'play'  
 
 _params_:  
-`radio__uuid` : the radio uuid  
+`radio_uuid` : the radio uuid  
 `filename` : name of the audio file to play  
 `delay` : delay before play (in seconds)  
 `offset` : offset in file where to start playing  
