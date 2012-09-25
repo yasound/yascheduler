@@ -40,6 +40,7 @@ LOG_FILENAME = os.path.join(LOG_DIRECTORY, 'yascheduler.log')
 # sql alchemy
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.engine.url import URL
 
 if LOCAL_MODE:
     YASOUND_SERVER = 'http://127.0.0.1:8000'
@@ -52,13 +53,22 @@ if LOCAL_MODE:
         yaapp_alchemy_engine = create_engine('mysql+mysqldb://root:root@127.0.0.1:8889/yaapp')
         yasound_alchemy_engine = create_engine('mysql+mysqldb://root:root@127.0.0.1:8889/yasound')
 elif DEVELOPMENT_MODE:
-    YASOUND_SERVER = 'https://dev.yasound.com'
-    yaapp_alchemy_engine = create_engine('mysql+mysqldb://root:root@127.0.0.1:8889/yaapp')
-    yasound_alchemy_engine = create_engine('mysql+mysqldb://root:root@127.0.0.1:8889/yasound')
+    YASOUND_SERVER = 'http://dev.yasound.com'
+    yaapp_db = URL(drivername='mysql', host='localhost', database='yaapp', query=  { 'read_default_file' : '~/.my.cnf' } )
+    yaapp_alchemy_engine = create_engine(name_or_url=yaapp_db)
+
+    yasound_db = URL(drivername='mysql', host='localhost', database='yasound', query=  { 'read_default_file' : '~/.my.cnf.yasound' } )
+    yasound_alchemy_engine = create_engine(name_or_url=yasound_db)
+
 elif PRODUCTION_MODE:
-    YASOUND_SERVER = 'https://api.yasound.com'
-    yaapp_alchemy_engine = create_engine('mysql+mysqldb://root:root@127.0.0.1:8889/yaapp')
-    yasound_alchemy_engine = create_engine('mysql+mysqldb://root:root@127.0.0.1:8889/yasound')
+    YASOUND_SERVER = 'https://yasound.com'
+
+    yaapp_db = URL(drivername='mysql', host='localhost', database='yaapp', query=  { 'read_default_file' : '~/.my.cnf' } )
+    yaapp_alchemy_engine = create_engine(name_or_url=yaapp_db)
+
+    yasound_db = URL(drivername='mysql', host='localhost', database='yasound', query=  { 'read_default_file' : '~/.my.cnf' } )
+    yasound_alchemy_engine = create_engine(name_or_url=yasound_db)
+
 elif TEST_MODE:
     YASOUND_SERVER = 'http://127.0.0.1:8000'
     yaapp_db_path = os.path.join(PROJECT_PATH, 'db_test_yascheduler.dat')
