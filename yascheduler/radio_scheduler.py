@@ -3,6 +3,7 @@ from logger import Logger
 from settings import yaapp_session_maker, yasound_session_maker
 from models.yaapp_alchemy_models import Radio, Playlist, SongInstance, SongMetadata
 from models.yasound_alchemy_models import YasoundSong
+from models.account_alchemy_models import User
 from datetime import datetime, timedelta, date
 import time
 from pymongo import ASCENDING, DESCENDING
@@ -11,6 +12,7 @@ import random
 from threading import Thread, Lock
 import redis
 import json
+import requests
 
 
 class Track:
@@ -41,9 +43,12 @@ class RedisListener(Thread):
 
     TYPE_MESSAGE_PLAY_RADIO = 'play_radio'
     TYPE_MESSAGE_STOP_RADIO = 'stop_radio'
-    TYPE_MESSAGE_USER_PERMISSION = 'user_permission'
+    TYPE_MESSAGE_USER_AUTHENTICATION = 'user_authentication'
     TYPE_MESSAGE_REGISTER_STREAMER = 'register_streamer'
     TYPE_MESSAGE_UNREGISTER_STREAMER = 'unregister_streamer'
+    TYPE_MESSAGE_PONG = 'pong'
+    TYPE_MESSAGE_REGISTER_LISTENER = 'register_listener'
+    TYPE_MESSAGE_UNREGISTER_LISTENER = 'unregister_listener'
 
     REDIS_LISTEN_CHANNEL = 'yascheduler'
 
@@ -67,13 +72,20 @@ class RedisListener(Thread):
                     self.radio_scheduler.receive_play_radio_message(data)
                 elif data.get('type', None) == self.TYPE_MESSAGE_STOP_RADIO:
                     self.radio_scheduler.receive_stop_radio_message(data)
-                elif data.get('type', None) == self.TYPE_MESSAGE_USER_PERMISSION:
-                    self.radio_scheduler.receive_user_permission_message(data)
+                elif data.get('type', None) == self.TYPE_MESSAGE_USER_AUTHENTICATION:
+                    self.radio_scheduler.receive_user_authentication_message(data)
                 elif data.get('type', None) == self.TYPE_MESSAGE_REGISTER_STREAMER:
                     self.radio_scheduler.receive_register_streamer_message(data)
                 elif data.get('type', None) == self.TYPE_MESSAGE_UNREGISTER_STREAMER:
                     self.radio_scheduler.receive_unregister_streamer_message(data)
+                elif data.get('type', None) == self.TYPE_MESSAGE_PONG:
+                    self.radio_scheduler.receive_pong_message(data)
+                elif data.get('type', None) == self.TYPE_MESSAGE_REGISTER_LISTENER:
+                    self.radio_scheduler.receive_register_listener_message(data)
+                elif data.get('type', None) == self.TYPE_MESSAGE_UNREGISTER_LISTENER:
+                    self.radio_scheduler.receive_unregister_listener_message(data)
             time.sleep(self.WAIT_TIME)
+
 
 class StreamerChecker(Thread):
     WAIT_TIME = 1  # seconds
@@ -98,17 +110,17 @@ class StreamerChecker(Thread):
             time.sleep(self.WAIT_TIME)
 
 
-
 class RadioScheduler():
-    EVENT_TYPE_NEW_HOUR = 'new_hour'
+    EVENT_TYPE_NEW_HOUR_PREPARE = 'prepare_new_hour'
     EVENT_TYPE_NEW_TRACK_PREPARE = 'prepare_new_track'
     EVENT_TYPE_NEW_TRACK_START = 'start_new_track'
+    EVENT_TYPE_TRACK_CONTINUE = 'continue_track'
 
     MESSAGE_TYPE_PLAY = 'play'
     MESSAGE_TYPE_RADIO_STARTED = 'radio_started'
     MESSAGE_TYPE_RADIO_STOPPED = 'radio_stopped'
     MESSAGE_TYPE_RADIO_EXISTS = 'radio_exists'
-    MESSAGE_TYPE_USER_PERMISSION = 'user_permission'
+    MESSAGE_TYPE_USER_AUTHENTICATION = 'user_authentication'
     MESSAGE_TYPE_PING = 'ping'
 
     STREAMER_PING_STATUS_OK = 'ok'
@@ -117,6 +129,7 @@ class RadioScheduler():
     DEFAULT_SECONDS_TO_WAIT = 0.050  # 50 milliseconds
 
     SONG_PREPARE_DURATION = 5  # seconds
+    CROSSFADE_DURATION = 1  # seconds
 
     REDIS_PUBLISH_CHANNEL = 'yastream'
 
@@ -125,12 +138,18 @@ class RadioScheduler():
 
         self.enable_ping_streamers = enable_ping_streamers
 
-        self.radio_events = settings.MONGO_DB.scheduler.radios.events
-        self.radio_states = settings.MONGO_DB.scheduler.radios.states
-        self.radio_states.ensure_index('radio_id', unique=True)
+        self.mongo_scheduler = settings.MONGO_DB.scheduler
 
-        self.streamers = settings.MONGO_DB.scheduler.streamers
+        self.radio_events = self.mongo_scheduler.radios.events
+        self.radio_states = self.mongo_scheduler.radios.states
+        self.radio_states.ensure_index('radio_uuid', unique=True)
+
+        self.streamers = self.mongo_scheduler.streamers
         self.streamers.ensure_index('name', unique=True)
+
+        self.listeners = self.mongo_scheduler.listeners
+        self.listeners.ensure_index('radio_uuid')
+        self.listeners.ensure_index('session_id', unique=True)
 
         self.yaapp_alchemy_session = yaapp_session_maker()
         self.yasound_alchemy_session = yasound_session_maker()
@@ -146,9 +165,14 @@ class RadioScheduler():
 
         self.redis = redis.StrictRedis(host=settings.REDIS_HOST, db=settings.REDIS_DB)
 
+    def clear_mongo(self):
+        self.radio_events.drop()
+        self.radio_states.drop()
+        self.streamers.drop()
+        self.listeners.drop()
+
     def test(self):
-        m = {'type': 'prout', 'name': 'blabla'}
-        self.send_message(m)
+        self.logger.info(self.is_hd_enabled(1))
 
     def run(self):
         # starts thread to listen to redis events
@@ -162,15 +186,15 @@ class RadioScheduler():
 
         #restart radios which should be active
         for radio_state in self.radio_states.find():
-            radio_id = radio_state.get('radio_id', None)
-            if radio_id is None:
+            radio_uuid = radio_state.get('radio_uuid', None)
+            if radio_uuid is None:
                 continue
-            event_count = self.radio_events.find({'radio_id': radio_id, 'date': {'$gte': datetime.now()}}).count()
-            print 'radio %d nb events %d' % (radio_id, event_count)
+            event_count = self.radio_events.find({'radio_uuid': radio_uuid, 'date': {'$gte': datetime.now()}}).count()
+            self.logger.info('radio %s nb events %d' % (radio_uuid, event_count))
             # if there are events for this radio, next track will be computed
             # else, restart the radio
             if event_count == 0:
-                self.start_radio(radio_id, radio_state['master_streamer'])
+                self.start_radio(radio_uuid, radio_state['master_streamer'])
 
         quit = False
         self.last_step_time = datetime.now()
@@ -212,28 +236,88 @@ class RadioScheduler():
 
     def handle_event(self, event):
         event_type = event.get('type', None)
-        if event_type == self.EVENT_TYPE_NEW_HOUR:
-            self.handle_new_hour(event)
+        if event_type == self.EVENT_TYPE_NEW_HOUR_PREPARE:
+            self.handle_new_hour_prepare(event)
         elif event_type == self.EVENT_TYPE_NEW_TRACK_START:
             self.handle_new_track_start(event)
         elif event_type == self.EVENT_TYPE_NEW_TRACK_PREPARE:
             self.handle_new_track_prepare(event)
+        elif event_type == self.EVENT_TYPE_TRACK_CONTINUE:
+            self.handle_track_continue(event)
         else:
-            print 'event "%s" can not be handled: unknown type' % event
+            self.logger.info('event "%s" can not be handled: unknown type' % event)
 
-    def handle_new_hour(self, event):
-        print self.EVENT_TYPE_NEW_HOUR
-        #TODO
+    def handle_new_hour_prepare(self, event):
+        self.logger.info('prepare new hour %s' % datetime.now().time().isoformat())
+        delay_before_play = event.get('delay_before_play', self.SONG_PREPARE_DURATION)
+        crossfade_duration = event.get('crossfade_duration', self.CROSSFADE_DURATION)
+        time = event.get('time', None)
+        if time is None:
+            self.logger.info('time event does not contain a valid "time" param: %s', event)
+            return
+
+        query = {
+                    'song_id': {'$exists': True, '$ne': None},
+                    'play_time': {'$exists': True, '$ne': None}
+        }
+        radio_uuids = self.radio_states.find(query).distinct('radio_uuid')
+        for uuid in radio_uuids:
+            jingle_track = self.get_time_jingle_track(uuid, time)
+            if jingle_track is not None:
+                radio_state = self.radio_states.find_one({'radio_uuid': uuid})
+                current_song_played = datetime.now() + timedelta(delay_before_play) - radio_state['play_time']  # offset in current song where to restart playing after jingle
+                current_song_id = radio_state['song_id']
+
+                # tell master streamer to play the jingle file
+                delay = delay_before_play
+                self.send_prepare_track_message(uuid, jingle_track.filename, delay, 0, crossfade_duration, radio_state['master_streamer'])
+
+                # remove netx "prepare track" event since the current song is paused
+                self.radio_events.remove({'type': self.EVENT_TYPE_NEW_TRACK_PREPARE, 'radio_uuid': uuid})
+
+                # store event to restart playing current song after jingle has finished
+                event = {
+                            'type': self.EVENT_TYPE_TRACK_CONTINUE,
+                            'date': self.current_step_time + timedelta(seconds=(delay_before_play + jingle_track.duration - self.CROSSFADE_DURATION - self.SONG_PREPARE_DURATION)),
+                            'radio_uuid': uuid,
+                            'song_id': current_song_id,
+                            'offset': current_song_played,
+                            'delay_before_play': self.SONG_PREPARE_DURATION,
+                            'crossfade_duration': self.CROSSFADE_DURATION
+                }
+                self.lock.acquire(True)
+                self.radio_events.insert(event, safe=True)
+                self.lock.release()
+
+    def handle_track_continue(self, event):
+        self.logger.info('track continue %s' % datetime.now().time().isoformat())
+        radio_uuid = event.get('radio_uuid', None)
+        song_id = event.get('song_id', None)
+        offset = event.get('offset', None)
+        delay_before_play = event.get('delay_before_play', self.SONG_PREPARE_DURATION)
+        crossfade_duration = event.get('crossfade_duration', self.CROSSFADE_DURATION)
+        if radio_uuid is None:
+            self.logger.info('"track continue" event does not contain a valid radio uuid   (%s)', event)
+            return
+        if song_id is None or offset is None:
+            self.logger.info('"track continue" event does not contain a valid song id and play offset: start a new song !   (%s)', event)
+            self.prepare_track(radio_uuid, delay_before_play, crossfade_duration)
+            return
+
+        song = self.yaapp_alchemy_session.query(SongInstance).get(song_id)
+        yasound_song = self.yasound_alchemy_session.query(YasoundSong).get(song.song_metadata.yasound_song_id)
+        track = Track(yasound_song.filename, yasound_song.duration, song=song)
+        self.play_track(radio_uuid, track, delay_before_play, offset, crossfade_duration)
 
     def handle_new_track_start(self, event):
-        print 'track start %s' % datetime.now().time().isoformat()
-        radio_id = event.get('radio_id', None)
-        if not radio_id:
+        self.logger.info('track start %s' % datetime.now().time().isoformat())
+        radio_uuid = event.get('radio_uuid', None)
+        if not radio_uuid:
             return
         song_id = event.get('song_id', None)
         show_id = event.get('show_id', None)
 
-        radio_state = self.radio_states.find_one({'radio_id': radio_id})
+        radio_state = self.radio_states.find_one({'radio_uuid': radio_uuid})
         radio_state['song_id'] = song_id
         radio_state['play_time'] = self.current_step_time
         if show_id is None:
@@ -248,42 +332,62 @@ class RadioScheduler():
 
         if song_id is not None:
             # a song is played (not a jingle)
-            # 1 - update SongInstance status: play_count and last_play_time
-            # 2 - update Radio status:  current_song
-            self.yaapp_alchemy_session.query(SongInstance).filter(SongInstance.id == song_id).update({SongInstance.play_count: SongInstance.play_count + 1, SongInstance.last_play_time: self.current_step_time})
-            self.yaapp_alchemy_session.query(Radio).filter(Radio.id == radio_id).update({Radio.current_song_id: song_id})
-            self.yaapp_alchemy_session.commit()
-            #
-            #TODO: report song as played => MONGO_DB.reports
-            #
+            # notify yaapp
 
-    # new 'track prepare' event has been received:
+            url = settings.YASOUND_SERVER + '/api/v1/radio/%s/song/%d/played/' % (radio_uuid, song_id)
+            requests.post(url, params={'key': settings.SCHEDULER_KEY})
+
     def handle_new_track_prepare(self, event):
-        print 'prepare track %s' % datetime.now().time().isoformat()
-        radio_id = event.get('radio_id', None)
-        if not radio_id:
+        """
+        new 'track prepare' event has been received:
+        """
+        self.logger.info('prepare track %s' % datetime.now().time().isoformat())
+        radio_uuid = event.get('radio_uuid', None)
+        if not radio_uuid:
             return
         delay_before_play = event.get('delay_before_play', self.SONG_PREPARE_DURATION)
-        self.prepare_track(radio_id, delay_before_play)
+        crossfade_duration = event.get('crossfade_duration', self.CROSSFADE_DURATION)
+        self.prepare_track(radio_uuid, delay_before_play, crossfade_duration)
 
-    #   1 - get next track and send it to the streamer
-    #   2 - create 'track start' event for this new track
-    #   3 - create next 'track prepare' event
-    def prepare_track(self, radio_id, delay_before_play):
-        track = self.get_next_track(radio_id, delay_before_play)
+    def play_track(self, radio_uuid, track, delay, offset, crossfade_duration):
+        # send message to the streamer
+        master_streamer = self.radio_states.find_one({'radio_uuid': radio_uuid})['master_streamer']  # dest_streamer is the radio's master streamer
+        message = self.send_prepare_track_message(radio_uuid, track.filename, delay, offset, crossfade_duration, master_streamer)
+
+        # store next 'track prepare' event
+        next_delay_before_play = self.SONG_PREPARE_DURATION
+        next_crossfade_duration = self.CROSSFADE_DURATION
+        next_date = self.current_step_time + timedelta(seconds=(delay + track.duration - offset - next_crossfade_duration - next_delay_before_play))
+        event = {
+                'type': self.EVENT_TYPE_NEW_TRACK_PREPARE,
+                'date': next_date,
+                'radio_uuid': radio_uuid,
+                'delay_before_play': next_delay_before_play,
+                'crossfade_duration': next_crossfade_duration
+        }
+        self.lock.acquire(True)
+        self.radio_events.insert(event, safe=True)
+        self.lock.release()
+
+        return message
+
+    def prepare_track(self, radio_uuid, delay_before_play, crossfade_duration):
+        """
+        1 - get next track
+        2 - create 'track start' event for this new track
+        3 - send it to the streamer
+        4 - create next 'track prepare' event
+        """
+        # 1 get next track
+        track = self.get_next_track(radio_uuid, delay_before_play)
         track_filename = track.filename
-        track_duration = track.duration
         offset = 0
-
-        # 1 - send message to streamer
-        dest_streamer = self.radio_states.find_one({'radio_id': radio_id})['master_streamer'] #  dest_streamer is the radio's master streamer
-        self.send_prepare_track_message(radio_id, track_filename, delay_before_play, offset, dest_streamer)
 
         # 2 store 'track start' event
         event = {
                 'type': self.EVENT_TYPE_NEW_TRACK_START,
                 'date': self.current_step_time + timedelta(seconds=delay_before_play),
-                'radio_id': radio_id,
+                'radio_uuid': radio_uuid,
                 'filename': track_filename,
         }
         if track.is_song:
@@ -294,21 +398,18 @@ class RadioScheduler():
         self.radio_events.insert(event, safe=True)
         self.lock.release()
 
-        # 3 - store next 'track prepare' event
-        next_delay_before_play = self.SONG_PREPARE_DURATION
-        next_date = self.current_step_time + timedelta(seconds=delay_before_play) + timedelta(seconds=track_duration) - timedelta(seconds=next_delay_before_play)
-        event = {
-                'type': self.EVENT_TYPE_NEW_TRACK_PREPARE,
-                'date': next_date,
-                'radio_id': radio_id,
-                'delay_before_play': next_delay_before_play
-        }
-        self.lock.acquire(True)
-        self.radio_events.insert(event, safe=True)
-        self.lock.release()
+        # 3 send message to the streamer
+        # 4 store next "prepare track" event
+        message = self.play_track(radio_uuid, track, delay_before_play, offset, crossfade_duration)
+        return message  # for test purpose
 
-    # get current show if exists
-    def get_current_show(self, shows, play_time):
+    def get_current_show(self, radio, play_time):
+        """
+        get current show if exists
+        """
+        playlists = self.yaapp_alchemy_session.query(Playlist).filter(Playlist.radio_id == radio.id)
+        playlist_ids = [x[0] for x in playlists.values(Playlist.id)]
+        shows = self.shows.find({'playlist_id': {'$in': playlist_ids}, 'enabled': True}).sort([('time', DESCENDING)])
         current = None
         week_days = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN']
         for s in shows:
@@ -338,25 +439,30 @@ class RadioScheduler():
                         break
         return current
 
-    def get_next_track(self, radio_id, delay_before_play):
+    def get_next_track(self, radio_uuid, delay_before_play):
         play_time = self.current_step_time + timedelta(seconds=delay_before_play)
 
-        playlists = self.yaapp_alchemy_session.query(Playlist).filter(Playlist.radio_id == radio_id)
-        playlist_ids = [x[0] for x in playlists.values(Playlist.id)]
-        shows = self.shows.find({'playlist_id': {'$in': playlist_ids}, 'enabled': True}).sort([('time', DESCENDING)])
-        # check if one of those shows is currently 'on air'
-        show_current = self.get_current_show(shows, play_time)
+        radio = self.yaapp_alchemy_session.query(Radio).filter(Radio.uuid == radio_uuid).first()
 
-        #FIXME: handle all cases (jingles, time jingles)
         track = None
-        if show_current:
-            track = self.get_song_in_show(radio_id, show_current['_id'], play_time)
-        if track is None:
-            track = self.get_song_default(radio_id, play_time)
+        if track is None:  # 1 check if we have to play an inter-song jingle
+            track = self.get_radio_jingle_track(radio_uuid)
+
+        if track is None:  # 2 check if we must be playing a show
+            # check if one of the radio shows is currently 'on air'
+            show_current = self.get_current_show(radio, play_time)
+            if show_current:
+                track = self.get_song_in_show(radio_uuid, show_current['_id'], play_time)
+
+        if track is None:  # 3 choose a song in the default playlist
+            track = self.get_song_default(radio.id, play_time)
+
         return track
 
-    # returns Track object
     def get_random_song(self, playlist, play_time):
+        """
+        returns Track object
+        """
         time_limit = play_time - timedelta(hours=3)
         # SongInstance playlist == playlist
         # SongInstance enabled == True
@@ -402,14 +508,14 @@ class RadioScheduler():
         track = Track(yasound_song.filename, yasound_song.duration, song=song)
         return track
 
-    def get_song_default(self, radio_id, play_time):
+    def get_song_default(self, radio_id, play_time):  # use radio id instead of uuid to filter playlists
         playlist = self.yaapp_alchemy_session.query(Playlist).filter(Playlist.radio_id == radio_id, Playlist.name == 'default').first()
         if not playlist:
             return None
         track = self.get_random_song(playlist, play_time)
         return track
 
-    def get_song_in_show(self, radio_id, show_id, play_time):
+    def get_song_in_show(self, radio_uuid, show_id, play_time):
         show = self.shows.find_one({'_id': show_id})
         if show is None:
             return None
@@ -422,7 +528,7 @@ class RadioScheduler():
             track = self.get_random_song(playlist, play_time)
             track.show = show
         else:
-            radio_state = self.radio_states.find_one({'radio_id': radio_id})
+            radio_state = self.radio_states.find_one({'radio_uuid': radio_uuid})
             previous_order = 0
             if radio_state['show_id'] is not None:
                 # song stored in radio_state is a song from the show, so it has a valid order value
@@ -435,48 +541,49 @@ class RadioScheduler():
             track = Track(yasound_song.filename, yasound_song.duration, song=song, show=show)
         return track
 
-    def get_radio_jingle(self, radio_id):
-        print 'get radio jingle'
+    def get_radio_jingle_track(self, radio_uuid):
+        # self.logger.info('get radio jingle track')
+        return None  # TODO
 
-    def get_time_jingle(self, radio_id):
-        print 'get time jingle'
+    def get_time_jingle_track(self, radio_uuid, time):
+        self.logger.info('get time jingle track')
+        return None  # TODO
 
-    def send_prepare_track_message(self, radio_id, track_filename, delay, offset, dest_streamer):
+    def send_prepare_track_message(self, radio_uuid, track_filename, delay, offset, crossfade_duration, dest_streamer):
         message = {'type': self.MESSAGE_TYPE_PLAY,
-                    'radio_id': radio_id,
+                    'radio_uuid': radio_uuid,
                     'filename': track_filename,
                     'delay': delay,
-                    'offset': offset
+                    'offset': offset,
+                    'crossfade_duration': crossfade_duration
         }
         self.send_message(message, dest_streamer)
+        return message
 
-    def send_radio_started_message(self, radio_id, dest_streamer):
+    def send_radio_started_message(self, radio_uuid, dest_streamer):
         message = {'type': self.MESSAGE_TYPE_RADIO_STARTED,
-                    'radio_id': radio_id,
-                    'master_streamer': dest_streamer
+                    'radio_uuid': radio_uuid
         }
         self.send_message(message, dest_streamer)
+        return message  # for test purpose
 
-    #  send message to notify the streamer that the radio is already handled by another streamer: master_streamer
-    def send_radio_exists_message(self, radio_id, dest_streamer, master_streamer):
+    def send_radio_exists_message(self, radio_uuid, dest_streamer, master_streamer):
+        """
+        send message to notify the streamer that the radio is already handled by another streamer: master_streamer
+        """
         message = {'type': self.MESSAGE_TYPE_RADIO_EXISTS,
-                    'radio_id': radio_id,
+                    'radio_uuid': radio_uuid,
                     'master_streamer': master_streamer
         }
         self.send_message(message, dest_streamer)
+        return message
 
-    def send_radio_stopped_message(self, radio_id, dest_streamer):
+    def send_radio_stopped_message(self, radio_uuid, dest_streamer):
         message = {'type': self.MESSAGE_TYPE_RADIO_STOPPED,
-                    'radio_id': radio_id
+                    'radio_uuid': radio_uuid
         }
         self.send_message(message, dest_streamer)
-
-    def send_user_permission_message(self, user_id, hd_enabled, dest_streamer):
-        message = {'type': self.MESSAGE_TYPE_USER_PERMISSION,
-                    'user_id': user_id,
-                    'hd': hd_enabled
-        }
-        self.send_message(message, dest_streamer)
+        return message
 
     def send_ping_message(self, dest_streamer):
         message = {'type': self.MESSAGE_TYPE_PING
@@ -491,34 +598,80 @@ class RadioScheduler():
         self.redis.publish(channel, m)
 
     def receive_play_radio_message(self, data):
-        radio_id = data.get('radio_id', None)
+        radio_uuid = data.get('radio_uuid', None)
         streamer = data.get('streamer', None)
-        if radio_id is None or streamer is None:
+        if radio_uuid is None or streamer is None:
             return
-        radio_state = self.radio_states.find_one({'radio_id': radio_id})
+        radio_state = self.radio_states.find_one({'radio_uuid': radio_uuid})
         if radio_state is None:
             #  create radio
-            self.send_radio_started_message(radio_id, streamer)
-            self.start_radio(radio_id, streamer)
+            message = self.send_radio_started_message(radio_uuid, streamer)
+            self.start_radio(radio_uuid, streamer)
         else:
             # radio already exists
             master_streamer = radio_state.get('master_streamer', None)
-            self.send_radio_exists_message(radio_id, streamer, master_streamer)
+            message = self.send_radio_exists_message(radio_uuid, streamer, master_streamer)
+        return message
 
     def receive_stop_radio_message(self, data):
-        radio_id = data.get('radio_id', None)
+        radio_uuid = data.get('radio_uuid', None)
         streamer = data.get('streamer', None)
-        radio_existed = self.stop_radio(radio_id)
+        radio_existed = self.stop_radio(radio_uuid)
+        message = None
         if radio_existed:
-            self.send_radio_stopped_message(radio_id, streamer)
+            message = self.send_radio_stopped_message(radio_uuid, streamer)
+        return message
 
-    def receive_user_permission_message(self, data):
-        user_id = data.get('user_id', None)
+    def receive_user_authentication_message(self, data):
+        """
+        receive a message asking for a user user_authentication
+        send a authentication message to the streamer in response,
+        that message contains a user id and the HD permission.
+        if no auth params are provided:
+            it's an anonymous client: user id = None
+        if auth_token param is provided:
+            ask yaapp to verify the token and return the authenticated user
+        if username and api_key are provided:
+            check in the db that it corresponds to a valid user
+            => this method is implemented for backward compatibility !!!
+                new streamers must not use this kind of authentication method, use 'auth_token' instead
+        """
         streamer = data.get('streamer', None)
-        if user_id is None or streamer is None:
+        if streamer is None:
             return
-        hd_enabled = self.is_hd_enabled(user_id)
-        self.send_user_permission_message(user_id, hd_enabled, streamer)
+        auth_token = data.get('auth_token', None)
+        if auth_token is not None:  # auth with token given by yaapp and passed to the streamer by the client
+            # ask yaapp if this token is valid and the user associated
+            url = '/api/v1/check_streamer_auth_token/%s' % (auth_token)
+            r = requests.get(url)
+            data = r.json
+            user_id = data.get('user_id', None)
+            response = {'auth_token': auth_token,
+                        'user_id': user_id
+            }
+        else:
+            username = data.get('username', None)
+            api_key = data.get('api_key', None)
+            if username is not None and api_key is not None:  # auth with username and api_key (for old clients compatibility)
+                user = self.yaapp_alchemy_session.query(User).filter(User.username == username).first()
+                user_id = None
+                if user.api_key.key == api_key:
+                    user_id = user.id
+                response = {'username': username,
+                            'api_key': api_key,
+                            'user_id': user_id
+                }
+            else:  # no auth : anonymous client
+                response = {'user_id': None}
+
+        if response['user_id'] is not None:
+            hd_enabled = self.is_hd_enabled(user_id)
+        else:
+            hd_enabled = False
+        response['hd'] = hd_enabled
+        response['type'] = self.MESSAGE_TYPE_USER_AUTHENTICATION
+        self.send_message(response, streamer)
+        return response
 
     def receive_register_streamer_message(self, data):
         streamer = data.get('streamer', None)
@@ -532,46 +685,94 @@ class RadioScheduler():
             return
         self.unregister_streamer(streamer)
 
+    def receive_register_listener_message(self, data):
+        radio_uuid = data.get('radio_uuid', None)
+        user_id = data.get('user_id', None)
+        session_id = data.get('session_id', None)
+        if radio_uuid is None or session_id is None:
+            return
+        return self.register_listener(radio_uuid, user_id, session_id)
+
+    def receive_unregister_listener_message(self, data):
+        session_id = data.get('session_id', None)
+        if session_id is None:
+            return
+        return self.unregister_listener(session_id)
+
+    def receive_pong_message(self, data):
+        """
+        receive a 'pong' message from the streamer in response to a 'ping' message
+        the streamer is alive
+        """
+        streamer_name = data.get('streamer', None)
+        if streamer_name is None:
+            return
+        streamer = self.streamers.find_one({'name': streamer_name})
+        streamer['ping_status'] = self.STREAMER_PING_STATUS_OK
+        self.streamers.update({'name': streamer_name}, streamer, safe=True)
+
     def is_hd_enabled(self, user_id):
-        return False  #FIXME
+        """
+        get HD permission for a user
+        """
+        if user_id is None:
+            return False
+        user = self.yaapp_alchemy_session.query(User).get(user_id)
+        return user.userprofile.hd_enabled
 
-
-    def start_radio(self, radio_id, master_streamer):
-        self.clean_radio(radio_id)
+    def start_radio(self, radio_uuid, master_streamer):
+        self.clean_radio(radio_uuid)
         # create radio state
-        radio_state = {'radio_id': radio_id,
+        radio_state = {'radio_uuid': radio_uuid,
                         'master_streamer': master_streamer
         }
         self.radio_states.insert(radio_state, safe=True)
         # prepare first track
-        self.prepare_track(radio_id, 0)  # no delay
+        self.prepare_track(radio_uuid, 0, 0)  # no delay, no crossfade
 
-    # return True if the radio existed
-    def stop_radio(self, radio_id):
-        res = self.clean_radio(radio_id)
-        return res
+    def stop_radio(self, radio_uuid):
+        """
+        clean radio info
+        return True if the radio existed
+        """
+        exists = self.radio_states.find({'radio_uuid': radio_uuid}).count() == 1
+        if exists:
+            self.radio_has_stopped(radio_uuid)  # send "radio stop" request to yaapp
+        self.clean_radio(radio_uuid)
+        return exists
 
-    def clean_radio_events(self, radio_id):
+    def clean_radio_events(self, radio_uuid):
         self.lock.acquire(True)
-        self.radio_events.remove({'radio_id': radio_id})
+        self.radio_events.remove({'radio_uuid': radio_uuid})
         self.lock.release()
 
-    # return True if the radio existed and has been removed, False if it didn't exist
-    def clean_radio_state(self, radio_id):
-        condition = {'radio_id': radio_id}
-        count = self.radio_states.find({'radio_id': radio_id}).count()
+    def clean_radio_state(self, radio_uuid):
+        """
+        return True if the radio existed and has been removed, False if it didn't exist
+        """
+        condition = {'radio_uuid': radio_uuid}
+        count = self.radio_states.find(condition).count()
         if count == 0:
             return False
         self.radio_states.remove(condition)
         return True
 
-    # return True if the radio existed, False if not
-    def clean_radio(self, radio_id):
-        self.clean_radio_events(radio_id)
-        res = self.clean_radio_state(radio_id)
+    def clean_radio_listeners(self, radio_uuid):
+        self.listeners.remove({'radio_uuid': radio_uuid})
+
+    def clean_radio(self, radio_uuid):
+        """
+        return True if the radio existed, False if not
+        """
+        self.clean_radio_events(radio_uuid)
+        res = self.clean_radio_state(radio_uuid)
+        self.clean_radio_listeners(radio_uuid)
         return res
 
     def cure_radio_events(self):
+        """
+        remove all radio events older than now
+        """
         self.lock.acquire(True)
         self.radio_events.remove({'date': {'$lt': datetime.now()}})
         self.lock.release()
@@ -583,9 +784,101 @@ class RadioScheduler():
         self.streamers.insert(streamer)
 
     def unregister_streamer(self, streamer_name):
+        # clean info for radios wich have this streamer as master streamer
+        radio_uuids = self.radio_states.find({'master_streamer': streamer_name}).distinct('radio_uuid')
+        for radio_uuid in radio_uuids:
+            self.stop_radio(radio_uuid)
+        # remove streamer from streamer list
         self.streamers.remove({'name': streamer_name})
 
+    def register_listener(self, radio_uuid, user_id, session_id):
+        """
+        register a client,
+        the listening session is identified by a unique session_id token given by the streamer
+        store the listener status in mongodb (including the listening start date)
+        and notify yaapp that a client (connected user or anonymous) started listening to a radio
+        """
+        # send 'user started listening' request
+        url_params = {'key': settings.SCHEDULER_KEY}
+        if user_id is not None:
+            user = self.yaapp_alchemy_session.query(User).get(user_id)
+            url_params['username'] = user.username
+            url_params['api_key'] = user.api_key.key
+        url = settings.YASOUND_SERVER + '/api/v1/radio/%s/start_listening/' % (radio_uuid)
+        requests.post(url, params=url_params)
+
+        # store listener
+        listener = {'session_id': session_id,
+                    'user_id': user_id,
+                    'radio_uuid': radio_uuid,
+                    'start_date': datetime.now()
+        }
+        self.listeners.insert(listener)
+        return listener  # for test purpose
+
+    def unregister_listener(self, session_id):
+        """
+        unregister client,
+        use session_id given by the streamer to retrieve the listener status
+        compute listening session duration
+        and notify yaapp that the client stopped listening and pass the listening duration
+        """
+        query = {'session_id': session_id}
+        listener = self.listeners.find_one(query)
+        if listener is None:
+            return (None, 0)
+        radio_uuid = listener['radio_uuid']
+        user_id = listener['user_id']
+        start_date = listener['start_date']
+        duration_timedelta = datetime.now() - start_date
+        seconds = int(duration_timedelta.days * 86400 + duration_timedelta.seconds + duration_timedelta.microseconds / 1000000.0)
+
+        # remove listener
+        self.listeners.remove(query)
+
+        # send 'user stopped listening' request
+        url_params = {
+                        'key': settings.SCHEDULER_KEY,
+                        'listening_duration': seconds
+        }
+        if user_id is not None:
+            user = self.yaapp_alchemy_session.query(User).get(user_id)
+            url_params['username'] = user.username
+            url_params['api_key'] = user.api_key.key
+        url = settings.YASOUND_SERVER + '/api/v1/radio/%s/stop_listening/' % (radio_uuid,)
+        requests.post(url, params=url_params)
+
+        return (listener, seconds)  # for test purpose
+
+    def radio_has_stopped(self, radio_uuid):
+        """
+        remove all listeners for this radio
+        compute total listening duration for all the clients
+        notify yaapp that the radio has stopped
+        """
+        now = datetime.now()
+        total_seconds = 0
+        query = {'radio_uuid': radio_uuid}
+        listeners = self.listeners.find(query)
+        for l in listeners:
+            start_date = l['start_date']
+            duration_timedelta = now - start_date
+            seconds = int(duration_timedelta.days * 86400 + duration_timedelta.seconds + duration_timedelta.microseconds / 1000000.0)
+            total_seconds += seconds
+        # remove radio listeners
+        self.listeners.remove(query)
+
+        # send 'radio stopped' request
+        url_params = {'listening_duration': total_seconds,
+                        'key': settings.SCHEDULER_KEY
+        }
+        url = settings.YASOUND_SERVER + '/api/v1/radio/%s/stopped/' % (radio_uuid)
+        requests.post(url, url_params)
+
     def ping_streamer(self, streamer_name):
+        """
+        send ping message via redis to the streamer to check if it's alive
+        """
         streamer = {'name': streamer_name,
                     'ping_status': self.STREAMER_PING_STATUS_WAITING
         }

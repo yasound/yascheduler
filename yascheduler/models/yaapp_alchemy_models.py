@@ -15,6 +15,11 @@ class Radio(Base):
     current_song_id = Column(Integer, ForeignKey('yabase_songinstance.id'))
     current_song = relationship('SongInstance')
 
+    def __init__(self, name, uuid=''):
+        self.name = name
+        self.uuid = uuid
+        self.current_song_id = None
+
     def __str__(self):
         return '(%d) %s - %s' % (self.id, self.name, self.uuid)
 
@@ -29,6 +34,11 @@ class Playlist(Base):
     radio_id = Column(Integer, ForeignKey('yabase_radio.id'))
     radio = relationship('Radio')
 
+    def __init__(self, name, radio):
+        self.name = name
+        self.enabled = True
+        self.radio_id = radio.id
+
     def __str__(self):
         return '(%d) %s - %s' % (self.id, self.name, self.radio.name)
 
@@ -42,6 +52,13 @@ class SongMetadata(Base):
     album_name = Column(String(255))
     duration = Column(Float)
     yasound_song_id = Column(Integer)
+
+    def __init__(self, name, artist_name, album_name, duration=20, yasound_song_id=0):
+        self.name = name
+        self.artist_name = artist_name
+        self.album_name = album_name
+        self.duration = duration
+        self.yasound_song_id = yasound_song_id
 
     def __str__(self):
         return '(%d) %s - %s - %s' % (self.id, self.artist_name, self.album_name, self.name)
@@ -62,6 +79,14 @@ class SongInstance(Base):
 
     playlist_id = Column(Integer, ForeignKey('yabase_playlist.id'))
     playlist = relationship('Playlist')
+
+    def __init__(self, song_metadata):
+        self.metadata_id = song_metadata.id
+        self.play_count = 0
+        self.last_play_time = None
+        self.order = None
+        self.frequency = 0.5
+        self.enabled = True
 
     def __str__(self):
         return '(%d) %s - %s' % (self.id, self.song_metadata.name, self.playlist.name)

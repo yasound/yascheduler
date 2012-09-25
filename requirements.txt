@@ -2,3 +2,4 @@
 redis
 SQLAlchemy
 pymongo
+requests

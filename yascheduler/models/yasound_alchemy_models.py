@@ -14,5 +14,12 @@ class YasoundSong(Base):
     filename = Column(String)
     duration = Column(Integer)
 
+    def __init__(self, name, artist_name, album_name, filename='', duration=20):
+        self.name = name
+        self.artist_name = artist_name
+        self.album_name = album_name
+        self.filename = filename
+        self.duration = duration
+
     def __str__(self):
         return '(%d) %s - %s - %s' % (self.id, self.artist_name, self.album_name, self.name)
