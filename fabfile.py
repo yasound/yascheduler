@@ -12,8 +12,8 @@ def prod():
 
     env.forward_agent = 'True'
     env.hosts = [
-        'yas-web-01.ig-1.net',
-        'yas-web-02.ig-1.net',
+        'yas-web-08.ig-1.net',
+        'yas-web-09.ig-1.net',
     ]
     env.user = "customer"
     WEBSITE_PATH = "/data/vhosts/y/yascheduler/root/"
@@ -30,10 +30,11 @@ def dev():
     global DJANGO_MODE
     env.forward_agent = 'True'
     env.hosts = [
-        'sd-14796.dedibox.fr',
+        'yas-dev-01.ig-1.net',
+        'yas-dev-02.ig-1.net',
     ]
     env.user = "customer"
-    WEBSITE_PATH = "/var/www/scheduler.yasound.com/root/"
+    WEBSITE_PATH = "/data/vhosts/y/yascheduler/root/"
     APP_PATH = "yascheduler"
     GIT_PATH = "git@github.com:yasound/yascheduler.git"
     BRANCH = "dev"
