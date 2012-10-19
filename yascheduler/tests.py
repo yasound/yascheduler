@@ -6,6 +6,7 @@ from models.yasound_alchemy_models import YasoundSong
 from models.account_alchemy_models import User, UserProfile, ApiKey
 from radio_scheduler import RadioScheduler
 import time
+from radio_state import RadioStateManager, RadioState
 
 def clean_db(yaapp_session, yasound_session):
     yaapp_session.query(Radio).delete()
@@ -122,15 +123,123 @@ class Test(TestCase):
         listener_count = self.scheduler.listeners.count()
         self.assertEqual(listener_count, 1)
 
-        wait = 3
+        wait = 1
         time.sleep(wait)
         unregister_data = {'session_id': session_id}
         listener, duration = self.scheduler.receive_unregister_listener_message(unregister_data)
         self.assertIsNotNone(listener)
-        self.assertTrue(duration >= wait)
+        self.assertGreaterEqual(duration, wait)
 
         listener_count = self.scheduler.listeners.count()
         self.assertEqual(listener_count, 0)
 
         self.yaapp_session.commit()
         self.yasound_session.commit()
+
+
+class TestRadioState(TestCase):
+
+    def setUp(self):
+        self.manager = RadioStateManager()
+        self.manager.drop()
+
+    def test_state(self):
+        radio_uuid = '123456'
+        doc = {
+                'radio_uuid': radio_uuid
+        }
+        radio_state = RadioState(doc)
+        self.assertEqual(radio_state.radio_uuid, radio_uuid)
+        self.assertIsNone(radio_state.master_streamer)
+        self.assertFalse(radio_state.is_playing)
+
+        master_streamer = 'master'
+        radio_state.master_streamer = master_streamer
+        self.assertTrue(radio_state.is_playing)
+
+        doc2 = radio_state.as_doc()
+        self.assertEqual(doc2['radio_uuid'], radio_uuid)
+        self.assertEqual(doc2['master_streamer'], master_streamer)
+
+    def test_manager(self):
+        radio_uuid = '123456'
+        doc = {
+                'radio_uuid': radio_uuid
+        }
+        radio_state = RadioState(doc)
+
+        self.assertEqual(self.manager.count(radio_uuid), 0)
+        self.manager.insert(radio_state)
+        self.assertEqual(self.manager.count(radio_uuid), 1)
+
+        s = self.manager.radio_state(radio_uuid)
+        self.assertIsNotNone(s)
+        self.assertEqual(s.radio_uuid, radio_uuid)
+        self.assertIsNotNone(s._id)
+
+        master_streamer = 'streamer'
+        song_id = 789
+        s.master_streamer = master_streamer
+        s.song_id = song_id
+        self.manager.update(s)
+
+        s = self.manager.radio_state(radio_uuid)
+        self.assertEqual(s.master_streamer, master_streamer)
+        self.assertEqual(s.song_id, song_id)
+
+        exists = self.manager.exists(radio_uuid)
+        self.assertTrue(exists)
+
+        uuids = self.manager.radio_uuids_for_master_streamer(master_streamer)
+        self.assertEqual(1, len(uuids))
+        self.assertEqual(uuids[0], radio_uuid)
+
+        res = self.manager.remove('wrong_uuid')
+        self.assertFalse(res)
+
+        res = self.manager.remove(radio_uuid)
+        self.assertTrue(res)
+
+        self.assertEqual(self.manager.count(radio_uuid), 0)
+
+
+class TestExistingRadiosCheck(TestCase):
+    def setUp(self):
+        self.scheduler = RadioScheduler()
+        self.yaapp_session = self.scheduler.yaapp_alchemy_session
+        self.yasound_session = self.scheduler.yasound_alchemy_session
+        clean_db(self.yaapp_session, self.yasound_session)
+        self.scheduler.clear_mongo()
+
+    def test(self):
+        r1 = Radio('mat radio 1', 'uuid1')
+        r1.ready = True
+        self.yaapp_session.add(r1)
+
+        r2 = Radio('mat radio 2', 'uuid2')
+        r2.ready = True
+        self.yaapp_session.add(r2)
+
+        r3 = Radio('mat radio 3', 'uuid3')
+        r3.ready = False
+        self.yaapp_session.add(r3)
+
+        self.assertEqual(self.scheduler.radio_state_manager.radio_states.find().count(), 0)
+        self.scheduler.check_existing_radios()
+        self.assertEqual(self.scheduler.radio_state_manager.radio_states.find().count(), 2)
+
+        self.assertEqual(self.yaapp_session.query(Radio).filter(Radio.ready == True).count(), 2)
+        self.yaapp_session.query(Radio).filter(Radio.ready == False).update({'ready': True})
+        self.assertEqual(self.yaapp_session.query(Radio).filter(Radio.ready == True).count(), 3)
+
+        self.assertEqual(self.scheduler.radio_state_manager.radio_states.find().count(), 2)
+        self.scheduler.check_existing_radios()
+        self.assertEqual(self.scheduler.radio_state_manager.radio_states.find().count(), 3)
+
+        self.yaapp_session.query(Radio).filter(Radio.uuid == 'uuid1').update({'ready': False})
+
+        self.assertEqual(self.scheduler.radio_state_manager.radio_states.find().count(), 3)
+        self.scheduler.check_existing_radios()
+        self.assertEqual(self.scheduler.radio_state_manager.radio_states.find().count(), 2)
+
+
