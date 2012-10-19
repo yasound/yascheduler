@@ -4,6 +4,7 @@ import settings
 
 
 class RedisPublisher():
+    MESSAGE_TYPE_TEST = 'test'
     MESSAGE_TYPE_PLAY = 'play'
     MESSAGE_TYPE_RADIO_STARTED = 'radio_started'
     MESSAGE_TYPE_RADIO_STOPPED = 'radio_stopped'
@@ -14,6 +15,15 @@ class RedisPublisher():
     def __init__(self, channel):
         self.redis_publish_channel = channel
         self.redis = redis.StrictRedis(host=settings.REDIS_HOST, db=settings.REDIS_DB)
+
+    def send_test_message(self, info, dest_streamer):
+        print 'send_test_message'
+        message = {
+                    'type': self.MESSAGE_TYPE_TEST,
+                    'info': info
+        }
+        self.send_message(message, dest_streamer)
+        return message
 
     def send_prepare_track_message(self, radio_uuid, track_filename, delay, offset, crossfade_duration, dest_streamer):
         message = {
