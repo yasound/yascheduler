@@ -16,6 +16,7 @@ from streamer_checker import StreamerChecker
 from redis_listener import RedisListener
 from track import Track
 from redis_publisher import RedisPublisher
+from radio_state import RadioStateManager, RadioState
 
 
 class RadioScheduler():
@@ -23,6 +24,7 @@ class RadioScheduler():
     EVENT_TYPE_NEW_TRACK_PREPARE = 'prepare_new_track'
     EVENT_TYPE_NEW_TRACK_START = 'start_new_track'
     EVENT_TYPE_TRACK_CONTINUE = 'continue_track'
+    EVENT_TYPE_CHECK_EXISTING_RADIOS = 'check_existing_radios'
 
     STREAMER_PING_STATUS_OK = 'ok'
     STREAMER_PING_STATUS_WAITING = 'waiting'
@@ -31,6 +33,7 @@ class RadioScheduler():
 
     SONG_PREPARE_DURATION = 5  # seconds
     CROSSFADE_DURATION = 1  # seconds
+    CHECK_EXISTING_RADIOS_PERIOD = 10 * 60
 
     def __init__(self, enable_ping_streamers=True):
         self.logger = Logger().log
@@ -42,8 +45,8 @@ class RadioScheduler():
         self.mongo_scheduler = settings.MONGO_DB.scheduler
 
         self.radio_events = self.mongo_scheduler.radios.events
-        self.radio_states = self.mongo_scheduler.radios.states
-        self.radio_states.ensure_index('radio_uuid', unique=True)
+
+        self.radio_state_manager = RadioStateManager
 
         self.streamers = self.mongo_scheduler.streamers
         self.streamers.ensure_index('name', unique=True)
@@ -62,18 +65,19 @@ class RadioScheduler():
 
         self.lock = Lock()
 
+        # remove past events (those which sould have occured when the scheduler was off)
         self.cure_radio_events()
 
     def clear_mongo(self):
         self.radio_events.drop()
-        self.radio_states.drop()
+        self.radio_state_manager.drop()
+
         self.streamers.drop()
         self.listeners.drop()
 
-    def test(self):
-        self.logger.info(self.is_hd_enabled(1))
-
     def run(self):
+        self.last_step_time = datetime.now()
+
         # starts thread to listen to redis events
         listener = RedisListener(self)
         listener.start()
@@ -83,20 +87,43 @@ class RadioScheduler():
             checker = StreamerChecker(self)
             checker.start()
 
-        #restart radios which should be active
-        for radio_state in self.radio_states.find():
-            radio_uuid = radio_state.get('radio_uuid', None)
+        # #restart radios which should be active
+        # for radio_state_doc in self.radio_state_manager.radio_states.find():
+            # radio_uuid = radio_state_doc.get('radio_uuid', None)
+            # if radio_uuid is None:
+            #     continue
+            # event_count = self.radio_events.find({'radio_uuid': radio_uuid, 'date': {'$gte': datetime.now()}}).count()
+        #     self.logger.info('radio %s nb events %d' % (radio_uuid, event_count))
+        #     # if there are events for this radio, next track will be computed
+        #     # else, restart the radio
+        #     if event_count == 0:
+        #         #TODO: check
+        #         self.start_radio(radio_uuid, radio_state_doc['master_streamer'])
+
+        # prepare track for radios with no event in the future (events which should have occured when the scheduler was off and which have been cured)
+        for radio_state_doc in self.radio_state_manager.radio_states.find():
+            radio_uuid = radio_state_doc.get('radio_uuid', None)
             if radio_uuid is None:
                 continue
-            event_count = self.radio_events.find({'radio_uuid': radio_uuid, 'date': {'$gte': datetime.now()}}).count()
-            self.logger.info('radio %s nb events %d' % (radio_uuid, event_count))
-            # if there are events for this radio, next track will be computed
-            # else, restart the radio
+            event_count = self.radio_events.find({'radio_uuid': radio_uuid}).count()
+            # if there are events for this radio, next track will be computed later
+            # else, prepare a new track now
             if event_count == 0:
-                self.start_radio(radio_uuid, radio_state['master_streamer'])
+                delay_before_play = 0
+                crossfade_duration = 0
+                self.prepare_track(radio_uuid, delay_before_play, crossfade_duration)
+
+        # add the event for the next hour if it does not exist yet
+        hour_event_count = self.radio_events.find({'type': self.EVENT_TYPE_NEW_HOUR_PREPARE}).count()
+        if hour_event_count == 0:
+            self.add_next_hour_event()
+
+        # add the event to check the existing radios if it does not exist yet
+        check_event_count = self.radio_events.find({'type': self.EVENT_TYPE_CHECK_EXISTING_RADIOS}).count()
+        if check_event_count == 0:
+            self.add_next_check_radios_event(self.CHECK_EXISTING_RADIOS_PERIOD)
 
         quit = False
-        self.last_step_time = datetime.now()
         while not quit:
             self.current_step_time = datetime.now()
 
@@ -143,8 +170,15 @@ class RadioScheduler():
             self.handle_new_track_prepare(event)
         elif event_type == self.EVENT_TYPE_TRACK_CONTINUE:
             self.handle_track_continue(event)
+        elif event_type == self.EVENT_TYPE_CHECK_EXISTING_RADIOS:
+            self.handle_check_existing_radios(event)
         else:
             self.logger.info('event "%s" can not be handled: unknown type' % event)
+
+    def handle_check_existing_radios(self, event):
+        self.check_existing_radios()
+        # add next check event
+        self.add_next_check_radios_event(self.CHECK_EXISTING_RADIOS_PERIOD)
 
     def handle_new_hour_prepare(self, event):
         self.logger.info('prepare new hour %s' % datetime.now().time().isoformat())
@@ -156,20 +190,21 @@ class RadioScheduler():
             return
 
         query = {
-                    'song_id': {'$exists': True, '$ne': None},
-                    'play_time': {'$exists': True, '$ne': None}
+                    'master_streamer':  {'$exists': True, '$ne': None},
+                    'song_id':          {'$exists': True, '$ne': None},
+                    'play_time':        {'$exists': True, '$ne': None}
         }
-        radio_uuids = self.radio_states.find(query).distinct('radio_uuid')
+        radio_uuids = self.radio_state_manager.radio_states.find(query).distinct('radio_uuid')
         for uuid in radio_uuids:
             jingle_track = self.get_time_jingle_track(uuid, time)
             if jingle_track is not None:
-                radio_state = self.radio_states.find_one({'radio_uuid': uuid})
-                current_song_played = datetime.now() + timedelta(delay_before_play) - radio_state['play_time']  # offset in current song where to restart playing after jingle
-                current_song_id = radio_state['song_id']
+                radio_state = self.radio_state_manager.radio_state(uuid)
+                current_song_played = datetime.now() + timedelta(delay_before_play) - radio_state.play_time  # offset in current song where to restart playing after jingle
+                current_song_id = radio_state.song_id
 
                 # tell master streamer to play the jingle file
                 delay = delay_before_play
-                self.publisher.send_prepare_track_message(uuid, jingle_track.filename, delay, 0, crossfade_duration, radio_state['master_streamer'])
+                self.publisher.send_prepare_track_message(uuid, jingle_track.filename, delay, 0, crossfade_duration, radio_state.master_streamer)
 
                 # remove netx "prepare track" event since the current song is paused
                 self.radio_events.remove({'type': self.EVENT_TYPE_NEW_TRACK_PREPARE, 'radio_uuid': uuid})
@@ -188,7 +223,13 @@ class RadioScheduler():
                 self.radio_events.insert(event, safe=True)
                 self.lock.release()
 
+        # add next hour event
+        self.add_next_hour_event()
+
     def handle_track_continue(self, event):
+        """
+        restart a track after it has been paused (for example, because of a time jingle)
+        """
         self.logger.info('track continue %s' % datetime.now().time().isoformat())
         radio_uuid = event.get('radio_uuid', None)
         song_id = event.get('song_id', None)
@@ -199,6 +240,7 @@ class RadioScheduler():
             self.logger.info('"track continue" event does not contain a valid radio uuid   (%s)', event)
             return
         if song_id is None or offset is None:
+            # event does not contain a valid song id and play offset =>  start a new song !
             self.logger.info('"track continue" event does not contain a valid song id and play offset: start a new song !   (%s)', event)
             self.prepare_track(radio_uuid, delay_before_play, crossfade_duration)
             return
@@ -216,18 +258,18 @@ class RadioScheduler():
         song_id = event.get('song_id', None)
         show_id = event.get('show_id', None)
 
-        radio_state = self.radio_states.find_one({'radio_uuid': radio_uuid})
-        radio_state['song_id'] = song_id
-        radio_state['play_time'] = self.current_step_time
+        radio_state = self.radio_state_manager.radio_state(radio_uuid)
+        radio_state.song_id = song_id
+        radio_state.play_time = self.current_step_time
         if show_id is None:
-            radio_state['show_id'] = None
-            radio_state['show_time'] = None
-        elif ('show_id' not in radio_state) or (radio_state['show_id'] != show_id):
+            radio_state.show_id = None
+            radio_state.show_time = None
+        elif radio_state.show_id != show_id:
             # it's a new show
-            radio_state['show_id'] = show_id
-            radio_state['show_time'] = self.current_step_time
+            radio_state.show_id = show_id
+            radio_state.show_time = self.current_step_time
         # update the radio state in mongoDB
-        self.radio_states.update({'_id': radio_state['_id']}, radio_state, safe=True)
+        self.radio_state_manager.update(radio_state)
 
         if song_id is not None:
             # a song is played (not a jingle)
@@ -250,11 +292,19 @@ class RadioScheduler():
         self.prepare_track(radio_uuid, delay_before_play, crossfade_duration)
 
     def play_track(self, radio_uuid, track, delay, offset, crossfade_duration):
-        # send message to the streamer
-        master_streamer = self.radio_states.find_one({'radio_uuid': radio_uuid})['master_streamer']  # dest_streamer is the radio's master streamer
-        message = self.publisher.send_prepare_track_message(radio_uuid, track.filename, delay, offset, crossfade_duration, master_streamer)
+        """
+        1 - if the radio is currently listened (ie if a streamer builds its mp3 stream), ask the streamer to play this track
+        2 - add a future event to prepare the next track
+        """
+        # 1 - if the radio is currently listened (ie the radio state contains a valid master_streamer ref): send message to the streamer to play the track
+        radio_state = self.radio_state_manager.radio_state(radio_uuid)
+        master_streamer = radio_state.master_streamer  # dest_streamer is the radio's master streamer
+        if master_streamer is not None:
+            message = self.publisher.send_prepare_track_message(radio_uuid, track.filename, delay, offset, crossfade_duration, master_streamer)
+        else:
+            message = None
 
-        # store next 'track prepare' event
+        # 2 - store next 'track prepare' event
         next_delay_before_play = self.SONG_PREPARE_DURATION
         next_crossfade_duration = self.CROSSFADE_DURATION
         next_date = self.current_step_time + timedelta(seconds=(delay + track.duration - offset - next_crossfade_duration - next_delay_before_play))
@@ -431,11 +481,11 @@ class RadioScheduler():
             track = self.get_random_song(playlist, play_time)
             track.show = show
         else:
-            radio_state = self.radio_states.find_one({'radio_uuid': radio_uuid})
+            radio_state = self.radio_state_manager.radio_state(radio_uuid)
             previous_order = 0
-            if radio_state['show_id'] is not None:
+            if radio_state.show_id is not None:
                 # song stored in radio_state is a song from the show, so it has a valid order value
-                previous_song = self.yaapp_alchemy_session.query(SongInstance).get(radio_state['song_id'])
+                previous_song = self.yaapp_alchemy_session.query(SongInstance).get(radio_state.song_id)
                 previous_order = previous_song.order
             song = self.yaapp_alchemy_session.query(SongInstance).filter(SongInstance.playlist_id == playlist.id, SongInstance.order > previous_order).first()
             if song is None:
@@ -457,14 +507,14 @@ class RadioScheduler():
         streamer = data.get('streamer', None)
         if radio_uuid is None or streamer is None:
             return
-        radio_state = self.radio_states.find_one({'radio_uuid': radio_uuid})
-        if radio_state is None:
-            #  create radio
+        radio_state = self.radio_state_manager.radio_state(radio_uuid)
+        if radio_state is None or radio_state.master_streamer is None:
+            # start radio if it does not exist and play it
+            self.play_radio_v2(radio_uuid, streamer)
             message = self.publisher.send_radio_started_message(radio_uuid, streamer)
-            self.start_radio(radio_uuid, streamer)
         else:
             # radio already exists
-            master_streamer = radio_state.get('master_streamer', None)
+            master_streamer = radio_state.master_streamer
             message = self.publisher.send_radio_exists_message(radio_uuid, streamer, master_streamer)
         return message
 
@@ -578,23 +628,111 @@ class RadioScheduler():
     def start_radio(self, radio_uuid, master_streamer):
         self.clean_radio(radio_uuid)
         # create radio state
-        radio_state = {'radio_uuid': radio_uuid,
-                        'master_streamer': master_streamer
+        radio_state_doc = {'radio_uuid': radio_uuid,
+                            'master_streamer': master_streamer
         }
-        self.radio_states.insert(radio_state, safe=True)
+        radio_state = RadioState(radio_state_doc)
+        self.radio_state_manager.insert(radio_state)
         # prepare first track
         self.prepare_track(radio_uuid, 0, 0)  # no delay, no crossfade
+
+    def start_radio_v2(self, radio_uuid):
+        """
+        start radio programming
+        no need to be connected to a streamer which builds the mp3 stream
+        """
+        self.clean_radio(radio_uuid)
+        # create radio state
+        radio_state_doc = {'radio_uuid': radio_uuid}
+        radio_state = RadioState(radio_state_doc)
+        self.radio_state_manager.insert(radio_state)
+        # prepare first track
+        self.prepare_track(radio_uuid, 0, 0)  # no delay, no crossfade
+
+    def play_radio_v2(self, radio_uuid, streamer):
+        """
+        this play function is called when a streamer ask to play a radio
+        """
+        radio_state = self.radio_state_manager.radio_state(radio_uuid)
+        if radio_state != None and radio_state.master_streamer != None:
+            return
+
+        already_started = radio_state != None
+        # if the radio does not exist, start it
+        if not already_started:
+            self.start_radio_v2(radio_uuid)  # start_radio function prepares a new track to play
+            radio_state = self.radio_state_manager.radio_state(radio_uuid)
+            radio_state.master_streamer = streamer
+            self.radio_state_manager.update(radio_state)
+            return
+
+        # store the master streamer ref in the radio state
+        radio_state.master_streamer = streamer
+        self.radio_state_manager.update(radio_state)
+        # the radio already exists, so there is a current programmed track (but not played by the streamer)
+        # tell the streamer to play the track at the right offset
+        # update radio state with master streamer ref
+        song_id = radio_state.song_id
+        song_play_time = radio_state.play_time
+        song = self.yaapp_alchemy_session.query(SongInstance).get(song_id)
+        yasound_song = self.yasound_alchemy_session.query(YasoundSong).get(song.song_metadata.yasound_song_id)
+        track = Track(yasound_song.filename, yasound_song.duration, song=song)
+        delay = 0  # FIXME: or self.SONG_PREPARE_DURATION ?
+        elapsed_timedelta = self.current_step_time - song_play_time
+        offset = delay + elapsed_timedelta.days * (24 * 60 * 60) + elapsed_timedelta.seconds + elapsed_timedelta.microseconds / 1000000.0
+        crossfade_duration = 0
+        self.publisher.send_prepare_track_message(radio_uuid, track.filename, delay, offset, crossfade_duration, streamer)
 
     def stop_radio(self, radio_uuid):
         """
         clean radio info
         return True if the radio existed
         """
-        exists = self.radio_states.find({'radio_uuid': radio_uuid}).count() == 1
+        exists = self.radio_state_manager.exists(radio_uuid)
         if exists:
             self.radio_has_stopped(radio_uuid)  # send "radio stop" request to yaapp
-        self.clean_radio(radio_uuid)
+        # self.clean_radio(radio_uuid)  # FIXME: to check
         return exists
+
+    def add_next_hour_event(self):
+        t = datetime.now().time()
+        h = (t.hour + 1) % 24
+        t.replace(hour=h, minute=0, second=0, microsecond=0)
+        delay_before_play = self.SONG_PREPARE_DURATION
+        date = datetime.now().replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)  # next hour
+        event = {
+                    'type': self.EVENT_TYPE_NEW_HOUR_PREPARE,
+                    'delay_before_play': delay_before_play,
+                    'crossfade_duration': self.CROSSFADE_DURATION,
+                    'time': t,
+                    'date': date
+                }
+        self.radio_events.insert(event, safe=True)
+
+    def add_next_check_radios_event(self, seconds):
+        date = datetime.now() + timedelta(seconds=seconds)
+        event = {
+                    'type': self.EVENT_TYPE_CHECK_EXISTING_RADIOS,
+                    'date': date
+                }
+        self.radio_events.insert(event, safe=True)
+
+    def check_existing_radios(self):
+        scheduler_radio_uuids = set(self.radio_state_manager.radio_states.find().distinct('radio_uuid'))
+        radios = self.yaapp_alchemy_session.query(Radio).filter(Radio.ready == True)
+        db_radio_uuids = set([r.uuid for r in radios])
+
+        # uuids to remove from radio states (radio not ready anymore)
+        to_remove = scheduler_radio_uuids.difference(db_radio_uuids)
+
+        for uuid in to_remove:
+            self.radio_state_manager.remove(uuid)
+
+        # uuids to add to radio states (new radios)
+        to_add = db_radio_uuids.difference(scheduler_radio_uuids)
+
+        for uuid in to_add:
+            self.start_radio_v2(uuid)
 
     def clean_radio_events(self, radio_uuid):
         self.lock.acquire(True)
@@ -605,12 +743,7 @@ class RadioScheduler():
         """
         return True if the radio existed and has been removed, False if it didn't exist
         """
-        condition = {'radio_uuid': radio_uuid}
-        count = self.radio_states.find(condition).count()
-        if count == 0:
-            return False
-        self.radio_states.remove(condition)
-        return True
+        return self.radio_state_manager.remove(radio_uuid)
 
     def clean_radio_listeners(self, radio_uuid):
         self.listeners.remove({'radio_uuid': radio_uuid})
@@ -640,7 +773,7 @@ class RadioScheduler():
 
     def unregister_streamer(self, streamer_name):
         # clean info for radios wich have this streamer as master streamer
-        radio_uuids = self.radio_states.find({'master_streamer': streamer_name}).distinct('radio_uuid')
+        radio_uuids = self.radio_state_manager.radio_uuids_for_master_streamer(streamer_name)
         for radio_uuid in radio_uuids:
             self.stop_radio(radio_uuid)
         # remove streamer from streamer list
@@ -721,7 +854,7 @@ class RadioScheduler():
             seconds = int(duration_timedelta.days * 86400 + duration_timedelta.seconds + duration_timedelta.microseconds / 1000000.0)
             total_seconds += seconds
         # remove radio listeners
-        self.listeners.remove(query)
+        self.clean_radio_listeners(radio_uuid)
 
         # send 'radio stopped' request
         url_params = {'listening_duration': total_seconds,

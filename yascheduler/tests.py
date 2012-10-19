@@ -6,6 +6,7 @@ from models.yasound_alchemy_models import YasoundSong
 from models.account_alchemy_models import User, UserProfile, ApiKey
 from radio_scheduler import RadioScheduler
 import time
+from radio_state import RadioStateManager, RadioState
 
 def clean_db(yaapp_session, yasound_session):
     yaapp_session.query(Radio).delete()
@@ -19,118 +20,185 @@ def clean_db(yaapp_session, yasound_session):
 
     yasound_session.query(YasoundSong).delete()
 
-class Test(TestCase):
+# class Test(TestCase):
+
+#     def setUp(self):
+#         self.scheduler = RadioScheduler()
+#         self.yaapp_session = self.scheduler.yaapp_alchemy_session
+#         self.yasound_session = self.scheduler.yasound_alchemy_session
+#         clean_db(self.yaapp_session, self.yasound_session)
+
+#         self.scheduler.clear_mongo()
+
+#     def test_sqlalchemy_models(self):
+#         count = self.yasound_session.query(YasoundSong).count()
+#         self.assertEqual(count, 0)
+
+#         count = self.yaapp_session.query(Radio).count()
+#         self.assertEqual(count, 0)
+
+#         # test object creation
+#         m = SongMetadata('The Beatles', 'Help', 'Ticket to Ride')
+#         self.yaapp_session.add(m)
+#         count = self.yaapp_session.query(SongMetadata).count()
+#         self.assertEqual(count, 1)
+
+#         u = User('mat')
+#         self.yaapp_session.add(u)
+#         u = self.yaapp_session.query(User).first()
+#         key = 'keykeykey'
+#         api_key = ApiKey(u, key)
+#         self.yaapp_session.add(api_key)
+
+#         u = self.yaapp_session.query(User).first()
+#         self.assertEqual(u.api_key.key, key)
+
+#         api_key = self.yaapp_session.query(ApiKey).first()
+#         self.assertEqual(api_key.user_id, u.id)
+
+#         self.yaapp_session.commit()
+#         self.yasound_session.commit()
+
+#     def test_authentication(self):
+#         u = User('mat')
+#         self.yaapp_session.add(u)
+#         u = self.yaapp_session.query(User).first()
+
+#         profile = UserProfile('mat profile', u)
+#         hd_enabled = True
+#         profile.enable_hd(hd_enabled)
+#         self.yaapp_session.add(profile)
+
+#         key = 'keykeykey'
+#         api_key = ApiKey(u, key)
+#         self.yaapp_session.add(api_key)
+
+#         username = u.username
+#         api_key = u.api_key.key
+#         message_data = {'username': username,
+#                         'api_key': api_key,
+#                         'streamer': 'streamer'
+#         }
+#         resp = self.scheduler.receive_user_authentication_message(message_data)
+#         self.assertIsNotNone(resp['user_id'])
+#         self.assertEqual(resp['user_id'], u.id)
+#         self.assertEqual(resp['username'], username)
+#         self.assertEqual(resp['api_key'], api_key)
+#         self.assertEqual(resp['hd'], hd_enabled)
+
+#         resp = self.scheduler.receive_user_authentication_message({'streamer': 'streamer'})
+#         self.assertIsNotNone(resp)
+#         self.assertIsNone(resp['user_id'])
+
+#         self.yaapp_session.commit()
+#         self.yasound_session.commit()
+
+#     def test_client_register(self):
+#         u = User('mat')
+#         self.yaapp_session.add(u)
+#         u = self.yaapp_session.query(User).first()
+
+#         key = 'keykeykey'
+#         api_key = ApiKey(u, key)
+#         self.yaapp_session.add(api_key)
+
+#         listener_count = self.scheduler.listeners.count()
+#         self.assertEqual(listener_count, 0)
+
+#         radio_uuid = 'radio1'
+#         user_id = u.id
+#         session_id = 'session1'
+#         register_data = {'streamer': 'streamer1',
+#                         'radio_uuid': radio_uuid,
+#                         'user_id': user_id,
+#                         'session_id': session_id
+#         }
+#         listener = self.scheduler.receive_register_listener_message(register_data)
+#         self.assertIsNotNone(listener)
+#         self.assertEqual(listener['radio_uuid'], radio_uuid)
+#         self.assertEqual(listener['user_id'], user_id)
+#         self.assertEqual(listener['session_id'], session_id)
+#         self.assertIsNotNone(listener['start_date'])
+
+#         listener_count = self.scheduler.listeners.count()
+#         self.assertEqual(listener_count, 1)
+
+#         wait = 0.3
+#         time.sleep(wait)
+#         unregister_data = {'session_id': session_id}
+#         listener, duration = self.scheduler.receive_unregister_listener_message(unregister_data)
+#         self.assertIsNotNone(listener)
+#         self.assertTrue(duration >= wait)
+
+#         listener_count = self.scheduler.listeners.count()
+#         self.assertEqual(listener_count, 0)
+
+#         self.yaapp_session.commit()
+#         self.yasound_session.commit()
+
+
+class TestRadioState(TestCase):
 
     def setUp(self):
-        self.scheduler = RadioScheduler()
-        self.yaapp_session = self.scheduler.yaapp_alchemy_session
-        self.yasound_session = self.scheduler.yasound_alchemy_session
-        clean_db(self.yaapp_session, self.yasound_session)
+        self.manager = RadioStateManager()
+        self.manager.drop()
 
-        self.scheduler.clear_mongo()
-
-    def test_sqlalchemy_models(self):
-        count = self.yasound_session.query(YasoundSong).count()
-        self.assertEqual(count, 0)
-
-        count = self.yaapp_session.query(Radio).count()
-        self.assertEqual(count, 0)
-
-        # test object creation
-        m = SongMetadata('The Beatles', 'Help', 'Ticket to Ride')
-        self.yaapp_session.add(m)
-        count = self.yaapp_session.query(SongMetadata).count()
-        self.assertEqual(count, 1)
-
-        u = User('mat')
-        self.yaapp_session.add(u)
-        u = self.yaapp_session.query(User).first()
-        key = 'keykeykey'
-        api_key = ApiKey(u, key)
-        self.yaapp_session.add(api_key)
-
-        u = self.yaapp_session.query(User).first()
-        self.assertEqual(u.api_key.key, key)
-
-        api_key = self.yaapp_session.query(ApiKey).first()
-        self.assertEqual(api_key.user_id, u.id)
-
-        self.yaapp_session.commit()
-        self.yasound_session.commit()
-
-    def test_authentication(self):
-        u = User('mat')
-        self.yaapp_session.add(u)
-        u = self.yaapp_session.query(User).first()
-
-        profile = UserProfile('mat profile', u)
-        hd_enabled = True
-        profile.enable_hd(hd_enabled)
-        self.yaapp_session.add(profile)
-
-        key = 'keykeykey'
-        api_key = ApiKey(u, key)
-        self.yaapp_session.add(api_key)
-
-        username = u.username
-        api_key = u.api_key.key
-        message_data = {'username': username,
-                        'api_key': api_key,
-                        'streamer': 'streamer'
+    def test_state(self):
+        radio_uuid = '123456'
+        doc = {
+                'radio_uuid': radio_uuid
         }
-        resp = self.scheduler.receive_user_authentication_message(message_data)
-        self.assertIsNotNone(resp['user_id'])
-        self.assertEqual(resp['user_id'], u.id)
-        self.assertEqual(resp['username'], username)
-        self.assertEqual(resp['api_key'], api_key)
-        self.assertEqual(resp['hd'], hd_enabled)
+        radio_state = RadioState(doc)
+        self.assertEqual(radio_state.radio_uuid, radio_uuid)
+        self.assertIsNone(radio_state.master_streamer)
+        self.assertFalse(radio_state.is_playing)
 
-        resp = self.scheduler.receive_user_authentication_message({'streamer': 'streamer'})
-        self.assertIsNotNone(resp)
-        self.assertIsNone(resp['user_id'])
+        master_streamer = 'master'
+        radio_state.master_streamer = master_streamer
+        self.assertTrue(radio_state.is_playing)
 
-        self.yaapp_session.commit()
-        self.yasound_session.commit()
+        doc2 = radio_state.as_doc()
+        self.assertEqual(doc2['radio_uuid'], radio_uuid)
+        self.assertEqual(doc2['master_streamer'], master_streamer)
 
-    def test_client_register(self):
-        u = User('mat')
-        self.yaapp_session.add(u)
-        u = self.yaapp_session.query(User).first()
-
-        key = 'keykeykey'
-        api_key = ApiKey(u, key)
-        self.yaapp_session.add(api_key)
-
-        listener_count = self.scheduler.listeners.count()
-        self.assertEqual(listener_count, 0)
-
-        radio_uuid = 'radio1'
-        user_id = u.id
-        session_id = 'session1'
-        register_data = {'streamer': 'streamer1',
-                        'radio_uuid': radio_uuid,
-                        'user_id': user_id,
-                        'session_id': session_id
+    def test_manager(self):
+        radio_uuid = '123456'
+        doc = {
+                'radio_uuid': radio_uuid
         }
-        listener = self.scheduler.receive_register_listener_message(register_data)
-        self.assertIsNotNone(listener)
-        self.assertEqual(listener['radio_uuid'], radio_uuid)
-        self.assertEqual(listener['user_id'], user_id)
-        self.assertEqual(listener['session_id'], session_id)
-        self.assertIsNotNone(listener['start_date'])
+        radio_state = RadioState(doc)
 
-        listener_count = self.scheduler.listeners.count()
-        self.assertEqual(listener_count, 1)
+        self.assertEqual(self.manager.count(radio_uuid), 0)
+        self.manager.insert(radio_state)
+        self.assertEqual(self.manager.count(radio_uuid), 1)
 
-        wait = 3
-        time.sleep(wait)
-        unregister_data = {'session_id': session_id}
-        listener, duration = self.scheduler.receive_unregister_listener_message(unregister_data)
-        self.assertIsNotNone(listener)
-        self.assertTrue(duration >= wait)
+        s = self.manager.radio_state(radio_uuid)
+        self.assertIsNotNone(s)
+        self.assertEqual(s.radio_uuid, radio_uuid)
+        self.assertIsNotNone(s._id)
 
-        listener_count = self.scheduler.listeners.count()
-        self.assertEqual(listener_count, 0)
+        master_streamer = 'streamer'
+        song_id = 789
+        s.master_streamer = master_streamer
+        s.song_id = song_id
+        self.manager.update(s)
 
-        self.yaapp_session.commit()
-        self.yasound_session.commit()
+        s = self.manager.radio_state(radio_uuid)
+        self.assertEqual(s.master_streamer, master_streamer)
+        self.assertEqual(s.song_id, song_id)
+
+        exists = self.manager.exists(radio_uuid)
+        self.assertTrue(exists)
+
+        uuids = self.manager.radio_uuids_for_master_streamer(master_streamer)
+        self.assertEqual(1, len(uuids))
+        self.assertEqual(uuids[0], radio_uuid)
+
+        res = self.manager.remove('wrong_uuid')
+        self.assertFalse(res)
+
+        res = self.manager.remove(radio_uuid)
+        self.assertTrue(res)
+
+        self.assertEqual(self.manager.count(radio_uuid), 0)
+
