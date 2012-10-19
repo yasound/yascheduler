@@ -46,7 +46,7 @@ class RadioScheduler():
 
         self.radio_events = self.mongo_scheduler.radios.events
 
-        self.radio_state_manager = RadioStateManager
+        self.radio_state_manager = RadioStateManager()
 
         self.streamers = self.mongo_scheduler.streamers
         self.streamers.ensure_index('name', unique=True)
@@ -330,6 +330,8 @@ class RadioScheduler():
         """
         # 1 get next track
         track = self.get_next_track(radio_uuid, delay_before_play)
+        if track is None:
+            return None
         track_filename = track.filename
         offset = 0
 
@@ -574,7 +576,8 @@ class RadioScheduler():
         else:
             hd_enabled = False
         response['hd'] = hd_enabled
-        response['type'] = self.MESSAGE_TYPE_USER_AUTHENTICATION
+
+        response['type'] = self.publisher.MESSAGE_TYPE_USER_AUTHENTICATION
         self.publisher.send_message(response, streamer)
         return response
 
