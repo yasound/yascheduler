@@ -17,7 +17,6 @@ class RedisPublisher():
         self.redis = redis.StrictRedis(host=settings.REDIS_HOST, db=settings.REDIS_DB)
 
     def send_test_message(self, info, dest_streamer):
-        print 'send_test_message'
         message = {
                     'type': self.MESSAGE_TYPE_TEST,
                     'info': info

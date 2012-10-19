@@ -495,7 +495,6 @@ class RadioScheduler():
         return None  # TODO
 
     def receive_test_message(self, data):
-        self.logger.info('receive_test_message')
         info = data.get('info', None)
         dest_streamer = data.get('streamer', None)
         self.publisher.send_test_message(info, dest_streamer)
