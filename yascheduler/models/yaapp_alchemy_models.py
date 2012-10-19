@@ -14,11 +14,13 @@ class Radio(Base):
     uuid = Column(String)
     current_song_id = Column(Integer, ForeignKey('yabase_songinstance.id'))
     current_song = relationship('SongInstance')
+    ready = Column(Boolean)
 
     def __init__(self, name, uuid=''):
         self.name = name
         self.uuid = uuid
         self.current_song_id = None
+        self.ready = False
 
     def __str__(self):
         return '(%d) %s - %s' % (self.id, self.name, self.uuid)
