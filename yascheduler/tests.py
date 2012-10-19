@@ -236,4 +236,10 @@ class TestExistingRadiosCheck(TestCase):
         self.scheduler.check_existing_radios()
         self.assertEqual(self.scheduler.radio_state_manager.radio_states.find().count(), 3)
 
+        self.yaapp_session.query(Radio).filter(Radio.uuid == 'uuid1').update({'ready': False})
+
+        self.assertEqual(self.scheduler.radio_state_manager.radio_states.find().count(), 3)
+        self.scheduler.check_existing_radios()
+        self.assertEqual(self.scheduler.radio_state_manager.radio_states.find().count(), 2)
+
 
