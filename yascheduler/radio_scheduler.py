@@ -87,19 +87,6 @@ class RadioScheduler():
             checker = StreamerChecker(self)
             checker.start()
 
-        # #restart radios which should be active
-        # for radio_state_doc in self.radio_state_manager.radio_states.find():
-            # radio_uuid = radio_state_doc.get('radio_uuid', None)
-            # if radio_uuid is None:
-            #     continue
-            # event_count = self.radio_events.find({'radio_uuid': radio_uuid, 'date': {'$gte': datetime.now()}}).count()
-        #     self.logger.info('radio %s nb events %d' % (radio_uuid, event_count))
-        #     # if there are events for this radio, next track will be computed
-        #     # else, restart the radio
-        #     if event_count == 0:
-        #         #TODO: check
-        #         self.start_radio(radio_uuid, radio_state_doc['master_streamer'])
-
         # prepare track for radios with no event in the future (events which should have occured when the scheduler was off and which have been cured)
         for radio_state_doc in self.radio_state_manager.radio_states.find():
             radio_uuid = radio_state_doc.get('radio_uuid', None)
@@ -184,7 +171,7 @@ class RadioScheduler():
         self.logger.info('prepare new hour %s' % datetime.now().time().isoformat())
         delay_before_play = event.get('delay_before_play', self.SONG_PREPARE_DURATION)
         crossfade_duration = event.get('crossfade_duration', self.CROSSFADE_DURATION)
-        time = event.get('time', None)
+        time = event.get('time', None)  # time value is a string like '17:17:13.129150'
         if time is None:
             self.logger.info('time event does not contain a valid "time" param: %s', event)
             return
@@ -370,7 +357,7 @@ class RadioScheduler():
             show_time = s['time']
             show_start_time = datetime.strptime(show_time, '%H:%M:%S.%f').time()
             show_end_time = (datetime.strptime(show_time, '%H:%M:%S.%f') + timedelta(seconds=show_duration)).time()
-            # be dure to handle every case, included cases where a show starts a day and ends the day after
+            # be sure to handle every case, included cases where a show starts a day and ends the day after
             # today 23:00 => tomorrow 1:00
             # or yesterday 23:00 => today 1:00
             today_start_date = datetime.combine(date.today(), show_start_time)
@@ -501,6 +488,9 @@ class RadioScheduler():
         return None  # TODO
 
     def get_time_jingle_track(self, radio_uuid, time):
+        """
+        time value is a string like '17:17:13.129150'
+        """
         self.logger.info('get time jingle track')
         return None  # TODO
 
@@ -700,14 +690,14 @@ class RadioScheduler():
     def add_next_hour_event(self):
         t = datetime.now().time()
         h = (t.hour + 1) % 24
-        t.replace(hour=h, minute=0, second=0, microsecond=0)
+        t = t.replace(hour=h, minute=0, second=0, microsecond=0)
         delay_before_play = self.SONG_PREPARE_DURATION
         date = datetime.now().replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)  # next hour
         event = {
                     'type': self.EVENT_TYPE_NEW_HOUR_PREPARE,
                     'delay_before_play': delay_before_play,
                     'crossfade_duration': self.CROSSFADE_DURATION,
-                    'time': t,
+                    'time': t.isoformat(),
                     'date': date
                 }
         self.radio_events.insert(event, safe=True)
