@@ -33,6 +33,18 @@ Messages are formatted using json:
 
 ##_- messages from the streamer (to yascheduler):_
 
+***
+__test__  
+sent to test redis communication  
+yascheduler sends back a 'test' message
+
+_type_ : 'test'  
+
+_params_:  
+`streamer` : streamer identifier
+`info` : user info (re-sent in response)
+
+
 
 ***
 __register streamer__  
@@ -137,6 +149,15 @@ _params_:
 
 
 ##_- messages from yascheduler (to the streamer):_
+
+***
+__test__  
+sent in response to a 'test' message from streamer  
+
+_type_ : 'test'  
+
+_params_:  
+`info` : user info passed in the first message  
 
 
 ***

@@ -7,6 +7,7 @@ import json
 class RedisListener(Thread):
     WAIT_TIME = 0.020  # seconds
 
+    TYPE_MESSAGE_TEST = 'test'
     TYPE_MESSAGE_PLAY_RADIO = 'play_radio'
     TYPE_MESSAGE_STOP_RADIO = 'stop_radio'
     TYPE_MESSAGE_USER_AUTHENTICATION = 'user_authentication'
@@ -34,7 +35,9 @@ class RedisListener(Thread):
                     continue
                 data_str = message.get('data')
                 data = json.loads(data_str)
-                if data.get('type', None) == self.TYPE_MESSAGE_PLAY_RADIO:
+                if data.get('type', None) == self.TYPE_MESSAGE_TEST:
+                    self.radio_scheduler.receive_test_message(data)
+                elif data.get('type', None) == self.TYPE_MESSAGE_PLAY_RADIO:
                     self.radio_scheduler.receive_play_radio_message(data)
                 elif data.get('type', None) == self.TYPE_MESSAGE_STOP_RADIO:
                     self.radio_scheduler.receive_stop_radio_message(data)
