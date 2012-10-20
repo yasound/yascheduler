@@ -37,38 +37,35 @@ class RadioScheduler():
 
     def __init__(self, enable_ping_streamers=True):
         self.logger = Logger().log
-        try:
-            self.publisher = RedisPublisher('yastream')
+        self.publisher = RedisPublisher('yastream')
 
-            self.enable_ping_streamers = enable_ping_streamers
+        self.enable_ping_streamers = enable_ping_streamers
 
-            self.mongo_scheduler = settings.MONGO_DB.scheduler
+        self.mongo_scheduler = settings.MONGO_DB.scheduler
 
-            self.radio_events = self.mongo_scheduler.radios.events
+        self.radio_events = self.mongo_scheduler.radios.events
 
-            self.radio_state_manager = RadioStateManager()
+        self.radio_state_manager = RadioStateManager()
 
-            self.streamers = self.mongo_scheduler.streamers
-            self.streamers.ensure_index('name', unique=True)
+        self.streamers = self.mongo_scheduler.streamers
+        self.streamers.ensure_index('name', unique=True)
 
-            self.listeners = self.mongo_scheduler.listeners
-            self.listeners.ensure_index('radio_uuid')
-            self.listeners.ensure_index('session_id', unique=True)
+        self.listeners = self.mongo_scheduler.listeners
+        self.listeners.ensure_index('radio_uuid')
+        self.listeners.ensure_index('session_id', unique=True)
 
-            self.yaapp_alchemy_session = yaapp_session_maker()
-            self.yasound_alchemy_session = yasound_session_maker()
+        self.yaapp_alchemy_session = yaapp_session_maker()
+        self.yasound_alchemy_session = yasound_session_maker()
 
-            self.shows = settings.MONGO_DB.shows
+        self.shows = settings.MONGO_DB.shows
 
-            self.current_step_time = datetime.now()
-            self.last_step_time = self.current_step_time
+        self.current_step_time = datetime.now()
+        self.last_step_time = self.current_step_time
 
-            self.lock = Lock()
+        self.lock = Lock()
 
-            # remove past events (those which sould have occured when the scheduler was off)
-            self.cure_radio_events()
-        except Exception, e:
-            logger.error(e)
+        # remove past events (those which sould have occured when the scheduler was off)
+        self.cure_radio_events()
 
     def clear_mongo(self):
         self.radio_events.drop()
@@ -144,7 +141,6 @@ class RadioScheduler():
                 seconds_to_wait = diff_timedelta.days * 86400 + diff_timedelta.seconds + diff_timedelta.microseconds / 1000000.0
 
             # waits until next event
-            self.logger.info('waiting %f' % (seconds_to_wait))
             time.sleep(seconds_to_wait)
 
             # store date for next step
