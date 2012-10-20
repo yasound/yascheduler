@@ -142,6 +142,7 @@ class RadioScheduler():
                 seconds_to_wait = diff_timedelta.days * 86400 + diff_timedelta.seconds + diff_timedelta.microseconds / 1000000.0
 
             # waits until next event
+            self.logger.info('waiting %f' % (seconds_to_wait))
             time.sleep(seconds_to_wait)
 
             # store date for next step
