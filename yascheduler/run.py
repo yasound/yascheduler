@@ -9,12 +9,18 @@ execfile(activate_this, dict(__file__=activate_this))
 from radio_scheduler import RadioScheduler
 
 import argparse
+from logger import Logger
 
-parser = argparse.ArgumentParser(description='Run yascheduler.')
-parser.add_argument('--disable_ping', '-p', dest='disable_ping', action='store_const', const=True, default=False, help='disable streamer checking and ping, disable removal of dead streamers')
+if __name__ == "__main__":
+    Logger().log.info('starting scheduler')
 
-args = parser.parse_args()
-enable_ping = not args.disable_ping
+    parser = argparse.ArgumentParser(description='Run yascheduler.')
+    parser.add_argument('--disable_ping', '-p', dest='disable_ping', action='store_const', const=True, default=False, help='disable streamer checking and ping, disable removal of dead streamers')
 
-scheduler = RadioScheduler(enable_ping_streamers=enable_ping)
-scheduler.run()
+    args = parser.parse_args()
+    enable_ping = not args.disable_ping
+
+    Logger().log.info('enable_ping = %s' % (enable_ping))
+
+    scheduler = RadioScheduler(enable_ping_streamers=enable_ping)
+    scheduler.run()
