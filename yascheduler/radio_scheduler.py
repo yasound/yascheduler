@@ -688,7 +688,7 @@ class RadioScheduler():
         exists = self.radio_state_manager.exists(radio_uuid)
         if exists:
             self.radio_has_stopped(radio_uuid)  # send "radio stop" request to yaapp
-        self.clean_radio(radio_uuid)  # FIXME: to check
+        # self.clean_radio(radio_uuid)  # FIXME: to check
         return exists
 
     def add_next_hour_event(self):
