@@ -770,10 +770,13 @@ class RadioScheduler():
 
     def unregister_streamer(self, streamer_name):
         # clean info for radios wich have this streamer as master streamer
+        self.logger.debug('unregister_streamer: streamer_name = %s' % (streamer_name))
         radio_uuids = self.radio_state_manager.radio_uuids_for_master_streamer(streamer_name)
         for radio_uuid in radio_uuids:
+            self.logger.debug('stopping radio %s' % (radio_uuid))
             self.stop_radio(radio_uuid)
         # remove streamer from streamer list
+        self.logger.debug('removing streamer from streamer list')
         self.streamers.remove({'name': streamer_name})
 
     def register_listener(self, radio_uuid, user_id, session_id):
