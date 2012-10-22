@@ -3,7 +3,7 @@ from threading import Thread
 
 
 class StreamerChecker(Thread):
-    WAIT_TIME = 5  # seconds
+    WAIT_TIME = 15  # seconds
 
     def __init__(self, radio_scheduler):
         Thread.__init__(self)
