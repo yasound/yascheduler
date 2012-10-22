@@ -26,20 +26,24 @@ class RedisListener(Thread):
         self.logger = Logger().log
 
     def run(self):
+        self.logger.debug('Redis listener run...')
         r = redis.StrictRedis(host=settings.REDIS_HOST, db=settings.REDIS_DB)
         r = r.pubsub()
         channel = self.REDIS_LISTEN_CHANNEL
         r.subscribe(channel)
         quit = False
-        counter = 0
         while not quit:
             for message in r.listen():
+                self.logger.debug('redis message received: %s' % message)
                 if message.get('type') != 'message':
                     continue
+
                 data_str = message.get('data')
                 data = json.loads(data_str)
 
                 message_type = data.get('type', None)
+                self.logger.debug('RECEIVE ***%s*** message          data = %s' % (message_type, data))
+
                 if message_type == self.TYPE_MESSAGE_TEST:
                     self.radio_scheduler.receive_test_message(data)
                 elif message_type == self.TYPE_MESSAGE_PLAY_RADIO:
