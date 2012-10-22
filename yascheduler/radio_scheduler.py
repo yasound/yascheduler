@@ -507,7 +507,7 @@ class RadioScheduler():
         if radio_state is None or radio_state.master_streamer is None:
             # start radio if it does not exist and play it
             message = self.publisher.send_radio_started_message(radio_uuid, streamer)
-            self.play_radio_v2(radio_uuid, streamer)
+            self.play_radio(radio_uuid, streamer)
         else:
             # radio already exists
             master_streamer = radio_state.master_streamer
@@ -622,18 +622,7 @@ class RadioScheduler():
         user = self.yaapp_alchemy_session.query(User).get(user_id)
         return user.userprofile.hd_enabled
 
-    def start_radio(self, radio_uuid, master_streamer):
-        self.clean_radio(radio_uuid)
-        # create radio state
-        radio_state_doc = {'radio_uuid': radio_uuid,
-                            'master_streamer': master_streamer
-        }
-        radio_state = RadioState(radio_state_doc)
-        self.radio_state_manager.insert(radio_state)
-        # prepare first track
-        self.prepare_track(radio_uuid, 0, 0)  # no delay, no crossfade
-
-    def start_radio_v2(self, radio_uuid):
+    def start_radio(self, radio_uuid):
         """
         start radio programming
         no need to be connected to a streamer which builds the mp3 stream
@@ -646,7 +635,7 @@ class RadioScheduler():
         # prepare first track
         self.prepare_track(radio_uuid, 0, 0)  # no delay, no crossfade
 
-    def play_radio_v2(self, radio_uuid, streamer):
+    def play_radio(self, radio_uuid, streamer):
         """
         this play function is called when a streamer ask to play a radio
         """
@@ -657,7 +646,7 @@ class RadioScheduler():
         already_started = radio_state != None
         # if the radio does not exist, start it
         if not already_started:
-            self.start_radio_v2(radio_uuid)  # start_radio function prepares a new track to play
+            self.start_radio(radio_uuid)  # start_radio function prepares a new track to play
             radio_state = self.radio_state_manager.radio_state(radio_uuid)
             radio_state.master_streamer = streamer
             self.radio_state_manager.update(radio_state)
@@ -733,7 +722,7 @@ class RadioScheduler():
         to_add = db_radio_uuids.difference(scheduler_radio_uuids)
 
         for uuid in to_add:
-            self.start_radio_v2(uuid)
+            self.start_radio(uuid)
 
     def clean_radio_events(self, radio_uuid):
         self.lock.acquire(True)

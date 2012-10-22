@@ -9,6 +9,7 @@ class RedisPublisher():
     MESSAGE_TYPE_RADIO_STARTED = 'radio_started'
     MESSAGE_TYPE_RADIO_STOPPED = 'radio_stopped'
     MESSAGE_TYPE_RADIO_EXISTS = 'radio_exists'
+    MESSAGE_TYPE_RADIO_UNKNOWN = 'radio_unknown'
     MESSAGE_TYPE_USER_AUTHENTICATION = 'user_authentication'
     MESSAGE_TYPE_PING = 'ping'
 
@@ -59,6 +60,14 @@ class RedisPublisher():
     def send_radio_stopped_message(self, radio_uuid, dest_streamer):
         message = {
                     'type': self.MESSAGE_TYPE_RADIO_STOPPED,
+                    'radio_uuid': radio_uuid
+        }
+        self.send_message(message, dest_streamer)
+        return message
+
+    def send_radio_unknown_message(self, radio_uuid, dest_streamer):
+        message = {
+                    'type': self.MESSAGE_TYPE_RADIO_UNKNOWN,
                     'radio_uuid': radio_uuid
         }
         self.send_message(message, dest_streamer)
