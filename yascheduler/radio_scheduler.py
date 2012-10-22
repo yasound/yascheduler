@@ -615,6 +615,7 @@ class RadioScheduler():
         user_id = data.get('user_id', None)
         session_id = data.get('session_id', None)
         if radio_uuid is None or session_id is None:
+            self.logger.debug('cannot register listener: radio_uuid or session_id is None')
             return
         return self.register_listener(radio_uuid, user_id, session_id)
 
@@ -809,11 +810,17 @@ class RadioScheduler():
         # send 'user started listening' request
         url_params = {'key': settings.SCHEDULER_KEY}
         if user_id is not None:
+            user_id = int(user_id)
             user = self.yaapp_alchemy_session.query(User).get(user_id)
-            url_params['username'] = user.username
-            url_params['api_key'] = user.api_key.key
+            if user is not None:
+                url_params['username'] = user.username
+                url_params['api_key'] = user.api_key.key
+            else:
+                self.logger.debug('cannot register listener with id %d (does not correspond to a valid user)' % user_id)
         url = settings.YASOUND_SERVER + '/api/v1/radio/%s/start_listening/' % (radio_uuid)
+        self.logger.debug('post start_listening request to yaapp')
         requests.post(url, params=url_params)
+        self.logger.debug('start_listening request posted')
 
         # store listener
         listener = {'session_id': session_id,
