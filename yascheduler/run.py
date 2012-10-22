@@ -24,7 +24,6 @@ if __name__ == "__main__":
 
     Logger().log.info('enable_ping = %s' % (enable_ping))
     Logger().log.info('flush = %s' % (flush))
-    Logger().log.info('dev mode = %s' % (settings.DEVELOPMENT_MODE))
 
     scheduler = RadioScheduler(enable_ping_streamers=enable_ping, flush=flush)
     scheduler.run()
