@@ -503,6 +503,11 @@ class RadioScheduler():
         streamer = data.get('streamer', None)
         if radio_uuid is None or streamer is None:
             return
+        if self.yaapp_alchemy_session.query(Radio).filter(Radio.uuid == radio_uuid).count() == 0:
+            # radio unknown: send 'radio_unknpwn' message to the streamer
+            message = self.publisher.send_radio_unknown_message(radio_uuid, streamer)
+            return
+
         radio_state = self.radio_state_manager.radio_state(radio_uuid)
         if radio_state is None or radio_state.master_streamer is None:
             # start radio if it does not exist and play it
