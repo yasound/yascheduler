@@ -35,11 +35,12 @@ class RadioScheduler():
     CROSSFADE_DURATION = 1  # seconds
     CHECK_EXISTING_RADIOS_PERIOD = 10 * 60
 
-    def __init__(self, enable_ping_streamers=True):
+    def __init__(self, enable_ping_streamers=True, flush=False):
         self.logger = Logger().log
         self.publisher = RedisPublisher('yastream')
 
         self.enable_ping_streamers = enable_ping_streamers
+        self.flush_before_run = flush
 
         self.mongo_scheduler = settings.MONGO_DB.scheduler
 
@@ -74,12 +75,20 @@ class RadioScheduler():
         self.streamers.drop()
         self.listeners.drop()
 
+    def flush(self):
+        self.clear_mongo()
+        self.check_existing_radios()
+
     def run(self):
         self.last_step_time = datetime.now()
 
         # starts thread to listen to redis events
         listener = RedisListener(self)
         listener.start()
+
+        # flush if needed
+        if self.flush_before_run:
+            self.flush()
 
         # starts streamer checker thread
         if self.enable_ping_streamers:
@@ -237,7 +246,7 @@ class RadioScheduler():
         self.play_track(radio_uuid, track, delay_before_play, offset, crossfade_duration)
 
     def handle_new_track_start(self, event):
-        self.logger.info('track start %s' % datetime.now().time().isoformat())
+        # self.logger.info('track start %s' % datetime.now().time().isoformat())
         radio_uuid = event.get('radio_uuid', None)
         if not radio_uuid:
             return
@@ -269,7 +278,7 @@ class RadioScheduler():
         new 'track prepare' event has been received
         we have a delay before a new track must be played in order to prepare this track
         """
-        self.logger.info('prepare track %s' % datetime.now().time().isoformat())
+        # self.logger.info('prepare track %s' % datetime.now().time().isoformat())
         radio_uuid = event.get('radio_uuid', None)
         if not radio_uuid:
             return
