@@ -31,35 +31,32 @@ class RedisListener(Thread):
         r = r.pubsub()
         channel = self.REDIS_LISTEN_CHANNEL
         r.subscribe(channel)
-        quit = False
-        while not quit:
-            for message in r.listen():
-                self.logger.debug('redis message received: %s' % message)
-                if message.get('type') != 'message':
-                    continue
+        for message in r.listen():
+            self.logger.debug('redis message received: %s' % message)
+            if message.get('type') != 'message':
+                continue
 
-                data_str = message.get('data')
-                data = json.loads(data_str)
+            data_str = message.get('data')
+            data = json.loads(data_str)
 
-                message_type = data.get('type', None)
-                self.logger.debug('RECEIVE ***%s*** message          data = %s' % (message_type, data))
+            message_type = data.get('type', None)
+            self.logger.debug('RECEIVE ***%s*** message          data = %s' % (message_type, data))
 
-                if message_type == self.TYPE_MESSAGE_TEST:
-                    self.radio_scheduler.receive_test_message(data)
-                elif message_type == self.TYPE_MESSAGE_PLAY_RADIO:
-                    self.radio_scheduler.receive_play_radio_message(data)
-                elif message_type == self.TYPE_MESSAGE_STOP_RADIO:
-                    self.radio_scheduler.receive_stop_radio_message(data)
-                elif message_type == self.TYPE_MESSAGE_USER_AUTHENTICATION:
-                    self.radio_scheduler.receive_user_authentication_message(data)
-                elif message_type == self.TYPE_MESSAGE_REGISTER_STREAMER:
-                    self.radio_scheduler.receive_register_streamer_message(data)
-                elif message_type == self.TYPE_MESSAGE_UNREGISTER_STREAMER:
-                    self.radio_scheduler.receive_unregister_streamer_message(data)
-                elif message_type == self.TYPE_MESSAGE_PONG:
-                    self.radio_scheduler.receive_pong_message(data)
-                elif message_type == self.TYPE_MESSAGE_REGISTER_LISTENER:
-                    self.radio_scheduler.receive_register_listener_message(data)
-                elif message_type == self.TYPE_MESSAGE_UNREGISTER_LISTENER:
-                    self.radio_scheduler.receive_unregister_listener_message(data)
-            time.sleep(self.WAIT_TIME)
+            if message_type == self.TYPE_MESSAGE_TEST:
+                self.radio_scheduler.receive_test_message(data)
+            elif message_type == self.TYPE_MESSAGE_PLAY_RADIO:
+                self.radio_scheduler.receive_play_radio_message(data)
+            elif message_type == self.TYPE_MESSAGE_STOP_RADIO:
+                self.radio_scheduler.receive_stop_radio_message(data)
+            elif message_type == self.TYPE_MESSAGE_USER_AUTHENTICATION:
+                self.radio_scheduler.receive_user_authentication_message(data)
+            elif message_type == self.TYPE_MESSAGE_REGISTER_STREAMER:
+                self.radio_scheduler.receive_register_streamer_message(data)
+            elif message_type == self.TYPE_MESSAGE_UNREGISTER_STREAMER:
+                self.radio_scheduler.receive_unregister_streamer_message(data)
+            elif message_type == self.TYPE_MESSAGE_PONG:
+                self.radio_scheduler.receive_pong_message(data)
+            elif message_type == self.TYPE_MESSAGE_REGISTER_LISTENER:
+                self.radio_scheduler.receive_register_listener_message(data)
+            elif message_type == self.TYPE_MESSAGE_UNREGISTER_LISTENER:
+                self.radio_scheduler.receive_unregister_listener_message(data)
