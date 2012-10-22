@@ -32,7 +32,7 @@ class RedisListener(Thread):
         channel = self.REDIS_LISTEN_CHANNEL
         r.subscribe(channel)
         for message in r.listen():
-            self.logger.debug('redis message received: %s' % message)
+            self.logger.debug('redis message RECEIVED (%s)' % message)
             if message.get('type') != 'message':
                 continue
 
@@ -60,3 +60,5 @@ class RedisListener(Thread):
                 self.radio_scheduler.receive_register_listener_message(data)
             elif message_type == self.TYPE_MESSAGE_UNREGISTER_LISTENER:
                 self.radio_scheduler.receive_unregister_listener_message(data)
+
+            self.logger.debug('redis message HANDLED (%s)' % message)
