@@ -103,7 +103,8 @@ or
 
 ***
 __play radio__  
-The streamer wants to play a radio,  
+The streamer wants to play a radio, 
+if the param `radio_uuid` does correspond to an existing radio, 'radio_unknown' message is sent in response  
 if another streamer already handles the radio, 'radio_exists' message is sent in response  
 if the radio didn't exist, it is created and 'radio_started' message is sent to the streamer
 
@@ -180,6 +181,16 @@ _type_ : 'radio_exists'
 _params_:  
 `radio_uuid` : the radio uuid  
 `master_streamer` : identifier of the master streamer  
+
+
+***
+__radio unknown__  
+sent when the streamer asks for a radio which does not correspond to a valid radio in the database,    
+
+_type_ : 'radio_unknown'  
+
+_params_:  
+`radio_uuid` : the radio uuid  
 
 
 ***
