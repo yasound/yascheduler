@@ -554,10 +554,12 @@ class RadioScheduler():
         """
         streamer = data.get('streamer', None)
         if streamer is None:
+            self.logger.debug('user auth: message does not contain streamer info')
             return
         auth_token = data.get('auth_token', None)
         if auth_token is not None:  # auth with token given by yaapp and passed to the streamer by the client
             # ask yaapp if this token is valid and the user associated
+            self.logger.debug('user auth: auth_token = %s', auth_token)
             url = '/api/v1/check_streamer_auth_token/%s' % (auth_token)
             r = requests.get(url)
             data = r.json
@@ -565,10 +567,12 @@ class RadioScheduler():
             response = {'auth_token': auth_token,
                         'user_id': user_id
             }
+            self.logger.debug('user auth: yaapp answered => user_id = %d' % user_id)
         else:
             username = data.get('username', None)
             api_key = data.get('api_key', None)
             if username is not None and api_key is not None:  # auth with username and api_key (for old clients compatibility)
+                self.logger.debug('user auth: username = %s, api_key = %s', (username, api_key))
                 user = self.yaapp_alchemy_session.query(User).filter(User.username == username).first()
                 user_id = None
                 if user.api_key.key == api_key:
@@ -577,7 +581,9 @@ class RadioScheduler():
                             'api_key': api_key,
                             'user_id': user_id
                 }
+                self.logger.debug('user auth: checked in db => user_id = %d', user_id)
             else:  # no auth : anonymous client
+                self.logger.debug('user auth: no auth params given => anonymous')
                 response = {'user_id': None}
 
         if response['user_id'] is not None:
