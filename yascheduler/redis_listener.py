@@ -39,7 +39,7 @@ class RedisListener(Thread):
             data = json.loads(data_str)
 
             message_type = data.get('type', None)
-            self.logger.debug('redis message %s RECEIVED (%s)' % message_type)
+            self.logger.debug('redis message %s RECEIVED' % message_type)
 
             if message_type == self.TYPE_MESSAGE_TEST:
                 self.radio_scheduler.receive_test_message(data)
@@ -60,4 +60,4 @@ class RedisListener(Thread):
             elif message_type == self.TYPE_MESSAGE_UNREGISTER_LISTENER:
                 self.radio_scheduler.receive_unregister_listener_message(data)
 
-            self.logger.debug('redis message %s HANDLED (%s)' % message_type)
+            self.logger.debug('redis message %s HANDLED' % message_type)
