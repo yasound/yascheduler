@@ -809,7 +809,7 @@ class RadioScheduler():
         """
         # send 'user started listening' request
         url_params = {'key': settings.SCHEDULER_KEY}
-        if user_id is not None:
+        if user_id is not None and user_id != '':
             user_id = int(user_id)
             user = self.yaapp_alchemy_session.query(User).get(user_id)
             if user is not None:
