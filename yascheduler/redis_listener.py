@@ -31,8 +31,13 @@ class RedisListener(Thread):
         channel = self.REDIS_LISTEN_CHANNEL
         r.subscribe(channel)
         quit = False
+        counter = 0
         while not quit:
+            if counter % 50 == 0:
+                self.logger.debug('Redis listener run...')
+            counter += 1
             for message in r.listen():
+                self.logger.debug('redis message received: %s' % message)
                 if message.get('type') != 'message':
                     continue
                 data_str = message.get('data')
