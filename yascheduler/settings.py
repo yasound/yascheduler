@@ -53,7 +53,7 @@ if LOCAL_MODE:
         yaapp_alchemy_engine = create_engine('mysql+mysqldb://root:root@127.0.0.1:8889/yaapp')
         yasound_alchemy_engine = create_engine('mysql+mysqldb://root:root@127.0.0.1:8889/yasound')
 elif DEVELOPMENT_MODE:
-    YASOUND_SERVER = 'http://yas-dev-01.ig-1.net'
+    YASOUND_SERVER = 'http://yasound:reagan@yas-dev-01.ig-1.net'
     yaapp_db = URL(drivername='mysql', host='localhost', database='yaapp', query=  { 'read_default_file' : '~/.my.cnf' } )
     yaapp_alchemy_engine = create_engine(name_or_url=yaapp_db)
 
