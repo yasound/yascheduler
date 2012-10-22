@@ -40,7 +40,7 @@ class RedisListener(Thread):
                 data = json.loads(data_str)
 
                 message_type = data.get('type', None)
-                self.logger.debug('redis message %s RECEIVED' % message_type)
+                self.logger.debug('redis message %s RECEIVED       data = %s' % (message_type, data))
 
                 if message_type == self.TYPE_MESSAGE_TEST:
                     self.radio_scheduler.receive_test_message(data)
