@@ -506,8 +506,8 @@ class RadioScheduler():
         radio_state = self.radio_state_manager.radio_state(radio_uuid)
         if radio_state is None or radio_state.master_streamer is None:
             # start radio if it does not exist and play it
-            self.play_radio_v2(radio_uuid, streamer)
             message = self.publisher.send_radio_started_message(radio_uuid, streamer)
+            self.play_radio_v2(radio_uuid, streamer)
         else:
             # radio already exists
             master_streamer = radio_state.master_streamer
