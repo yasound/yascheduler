@@ -560,14 +560,16 @@ class RadioScheduler():
         if auth_token is not None:  # auth with token given by yaapp and passed to the streamer by the client
             # ask yaapp if this token is valid and the user associated
             self.logger.debug('user auth: auth_token = %s', auth_token)
-            url = '/api/v1/check_streamer_auth_token/%s' % (auth_token)
+            url = settings.YASOUND_SERVER + '/api/v1/check_streamer_auth_token/%s/' % (auth_token)
             r = requests.get(url)
             data = r.json
-            user_id = data.get('user_id', None)
+            user_id = None
+            if data is not None:
+                user_id = data.get('user_id', None)
             response = {'auth_token': auth_token,
                         'user_id': user_id
             }
-            self.logger.debug('user auth: yaapp answered => user_id = %d' % user_id)
+            self.logger.debug('user auth: yaapp answered => user_id = %s' % user_id)
         else:
             username = data.get('username', None)
             api_key = data.get('api_key', None)
@@ -581,7 +583,7 @@ class RadioScheduler():
                             'api_key': api_key,
                             'user_id': user_id
                 }
-                self.logger.debug('user auth: checked in db => user_id = %d', user_id)
+                self.logger.debug('user auth: checked in db => user_id = %s', user_id)
             else:  # no auth : anonymous client
                 self.logger.debug('user auth: no auth params given => anonymous')
                 response = {'user_id': None}
