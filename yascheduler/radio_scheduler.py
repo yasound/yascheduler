@@ -496,6 +496,7 @@ class RadioScheduler():
     def receive_test_message(self, data):
         info = data.get('info', None)
         dest_streamer = data.get('streamer', None)
+
         self.publisher.send_test_message(info, dest_streamer)
 
     def receive_play_radio_message(self, data):

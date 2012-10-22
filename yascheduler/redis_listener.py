@@ -3,6 +3,7 @@ import settings
 import redis
 import time
 import json
+from logger import Logger
 
 class RedisListener(Thread):
     WAIT_TIME = 0.020  # seconds
@@ -22,6 +23,7 @@ class RedisListener(Thread):
     def __init__(self, radio_scheduler):
         Thread.__init__(self)
         self.radio_scheduler = radio_scheduler
+        self.logger = Logger().log
 
     def run(self):
         r = redis.StrictRedis(host=settings.REDIS_HOST, db=settings.REDIS_DB)
@@ -35,22 +37,26 @@ class RedisListener(Thread):
                     continue
                 data_str = message.get('data')
                 data = json.loads(data_str)
-                if data.get('type', None) == self.TYPE_MESSAGE_TEST:
+
+                message_type = data.get('type', None)
+                self.logger.debug('RECEIVE ***%s*** message          data = %s' % (message_type, data))
+
+                if message_type == self.TYPE_MESSAGE_TEST:
                     self.radio_scheduler.receive_test_message(data)
-                elif data.get('type', None) == self.TYPE_MESSAGE_PLAY_RADIO:
+                elif message_type == self.TYPE_MESSAGE_PLAY_RADIO:
                     self.radio_scheduler.receive_play_radio_message(data)
-                elif data.get('type', None) == self.TYPE_MESSAGE_STOP_RADIO:
+                elif message_type == self.TYPE_MESSAGE_STOP_RADIO:
                     self.radio_scheduler.receive_stop_radio_message(data)
-                elif data.get('type', None) == self.TYPE_MESSAGE_USER_AUTHENTICATION:
+                elif message_type == self.TYPE_MESSAGE_USER_AUTHENTICATION:
                     self.radio_scheduler.receive_user_authentication_message(data)
-                elif data.get('type', None) == self.TYPE_MESSAGE_REGISTER_STREAMER:
+                elif message_type == self.TYPE_MESSAGE_REGISTER_STREAMER:
                     self.radio_scheduler.receive_register_streamer_message(data)
-                elif data.get('type', None) == self.TYPE_MESSAGE_UNREGISTER_STREAMER:
+                elif message_type == self.TYPE_MESSAGE_UNREGISTER_STREAMER:
                     self.radio_scheduler.receive_unregister_streamer_message(data)
-                elif data.get('type', None) == self.TYPE_MESSAGE_PONG:
+                elif message_type == self.TYPE_MESSAGE_PONG:
                     self.radio_scheduler.receive_pong_message(data)
-                elif data.get('type', None) == self.TYPE_MESSAGE_REGISTER_LISTENER:
+                elif message_type == self.TYPE_MESSAGE_REGISTER_LISTENER:
                     self.radio_scheduler.receive_register_listener_message(data)
-                elif data.get('type', None) == self.TYPE_MESSAGE_UNREGISTER_LISTENER:
+                elif message_type == self.TYPE_MESSAGE_UNREGISTER_LISTENER:
                     self.radio_scheduler.receive_unregister_listener_message(data)
             time.sleep(self.WAIT_TIME)

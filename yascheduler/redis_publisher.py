@@ -1,6 +1,7 @@
 import json
 import redis
 import settings
+from logger import Logger
 
 
 class RedisPublisher():
@@ -16,6 +17,7 @@ class RedisPublisher():
     def __init__(self, channel):
         self.redis_publish_channel = channel
         self.redis = redis.StrictRedis(host=settings.REDIS_HOST, db=settings.REDIS_DB)
+        self.logger = Logger().log
 
     def send_test_message(self, info, dest_streamer):
         message = {
@@ -80,6 +82,7 @@ class RedisPublisher():
         self.send_message(message, dest_streamer)
 
     def send_message(self, message, streamer=None):
+        self.logger.debug('SEND ***%s*** message          dest_streamer = %s  data = %s' % (message.get('type', None), streamer, message))
         m = json.dumps(message)
         channel = self.redis_publish_channel
         if streamer is not None:
