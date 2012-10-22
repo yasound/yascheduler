@@ -95,6 +95,9 @@ class RadioScheduler():
             checker = StreamerChecker(self)
             checker.start()
 
+        # check existing radios
+        self.check_existing_radios()
+
         # prepare track for radios with no event in the future (events which should have occured when the scheduler was off and which have been cured)
         for radio_state_doc in self.radio_state_manager.radio_states.find():
             radio_uuid = radio_state_doc.get('radio_uuid', None)
