@@ -563,6 +563,7 @@ class RadioScheduler():
             url = settings.YASOUND_SERVER + '/api/v1/check_streamer_auth_token/%s/' % (auth_token)
             r = requests.get(url)
             data = r.json
+            self.logger.debug('user auth: check_streamer_auth_token returns => %s' % data)
             user_id = None
             if data is not None:
                 user_id = data.get('user_id', None)
