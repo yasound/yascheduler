@@ -633,6 +633,10 @@ class RadioScheduler():
         if streamer_name is None:
             return
         streamer = self.streamers.find_one({'name': streamer_name})
+        if streamer is None:
+            # this streamer is not alive (the pong message is maybe late, so the streamer has been considered as dead)
+            self.logger.debug('received "pong" message for a streamer (%s) which is not alive' % streamer_name)
+            return
         streamer['ping_status'] = self.STREAMER_PING_STATUS_OK
         self.streamers.update({'name': streamer_name}, streamer, safe=True)
 
