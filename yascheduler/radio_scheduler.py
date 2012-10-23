@@ -697,6 +697,12 @@ class RadioScheduler():
         # store the master streamer ref in the radio state
         radio_state.master_streamer = streamer
         self.radio_state_manager.update(radio_state)
+        if radio_state.song_id is None:
+            self.logger.debug('play radio %s: no current song id, prepare new track' % radio_uuid)
+            self.prepare_track(radio_uuid, 0, 0)
+            self.logger.debug('play radio %s: new track prepared' % radio_uuid)
+            return
+
         # the radio already exists, so there is a current programmed track (but not played by the streamer)
         # tell the streamer to play the track at the right offset
         # update radio state with master streamer ref
