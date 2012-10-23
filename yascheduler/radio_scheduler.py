@@ -703,6 +703,7 @@ class RadioScheduler():
         self.logger.debug('play radio %s: already exists, need to send prepare track msg' % radio_uuid)
         song_id = radio_state.song_id
         song_play_time = radio_state.play_time
+        self.logger.debug('play radio %s: already exists... 0' % radio_uuid)
         song = self.redis_listener.yaapp_alchemy_session.query(SongInstance).get(song_id)
         self.logger.debug('play radio %s: already exists... 1' % radio_uuid)
         yasound_song = self.redis_listener.yasound_alchemy_session.query(YasoundSong).get(song.song_metadata.yasound_song_id)
