@@ -686,10 +686,12 @@ class RadioScheduler():
         already_started = radio_state != None
         # if the radio does not exist, start it
         if not already_started:
+            self.logger.debug('play radio %s: need to start radio' % radio_uuid)
             self.start_radio(radio_uuid)  # start_radio function prepares a new track to play
             radio_state = self.radio_state_manager.radio_state(radio_uuid)
             radio_state.master_streamer = streamer
             self.radio_state_manager.update(radio_state)
+            self.logger.debug('play radio %s: need to start radio OK' % radio_uuid)
             return
 
         # store the master streamer ref in the radio state
@@ -698,16 +700,21 @@ class RadioScheduler():
         # the radio already exists, so there is a current programmed track (but not played by the streamer)
         # tell the streamer to play the track at the right offset
         # update radio state with master streamer ref
+        self.logger.debug('play radio %s: already exists, need to send prepare track msg' % radio_uuid)
         song_id = radio_state.song_id
         song_play_time = radio_state.play_time
         song = self.redis_listener.yaapp_alchemy_session.query(SongInstance).get(song_id)
+        self.logger.debug('play radio %s: already exists... 1' % radio_uuid)
         yasound_song = self.redis_listener.yasound_alchemy_session.query(YasoundSong).get(song.song_metadata.yasound_song_id)
+        self.logger.debug('play radio %s: already exists... 2' % radio_uuid)
         track = Track(yasound_song.filename, yasound_song.duration, song=song)
         delay = 0  # FIXME: or self.SONG_PREPARE_DURATION ?
         elapsed_timedelta = self.current_step_time - song_play_time
         offset = delay + elapsed_timedelta.days * (24 * 60 * 60) + elapsed_timedelta.seconds + elapsed_timedelta.microseconds / 1000000.0
         crossfade_duration = 0
+        self.logger.debug('play radio %s: already exists... 3' % radio_uuid)
         self.publisher.send_prepare_track_message(radio_uuid, track.filename, delay, offset, crossfade_duration, streamer)
+        self.logger.debug('play radio %s: prepare track msg sent' % radio_uuid)
 
     def stop_radio(self, radio_uuid):
         """
