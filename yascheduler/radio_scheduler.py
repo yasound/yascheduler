@@ -83,8 +83,8 @@ class RadioScheduler():
         self.last_step_time = datetime.now()
 
         # starts thread to listen to redis events
-        listener = RedisListener(self)
-        listener.start()
+        self.redis_listener = RedisListener(self)
+        self.redis_listener.start()
 
         # flush if needed
         if self.flush_before_run:
@@ -516,7 +516,8 @@ class RadioScheduler():
         streamer = data.get('streamer', None)
         if radio_uuid is None or streamer is None:
             return
-        if self.yaapp_alchemy_session.query(Radio).filter(Radio.uuid == radio_uuid).count() == 0:
+        import pdb;pdb.set_trace()
+        if self.redis_listener.yaapp_alchemy_session.query(Radio).filter(Radio.uuid == radio_uuid).count() == 0:
             # radio unknown: send 'radio_unknpwn' message to the streamer
             message = self.publisher.send_radio_unknown_message(radio_uuid, streamer)
             return
@@ -579,7 +580,7 @@ class RadioScheduler():
             api_key = data.get('api_key', None)
             if username is not None and api_key is not None:  # auth with username and api_key (for old clients compatibility)
                 self.logger.debug('user auth: username = %s, api_key = %s', (username, api_key))
-                user = self.yaapp_alchemy_session.query(User).filter(User.username == username).first()
+                user = self.redis_listener.yaapp_alchemy_session.query(User).filter(User.username == username).first()
                 user_id = None
                 if user.api_key.key == api_key:
                     user_id = user.id
@@ -651,7 +652,7 @@ class RadioScheduler():
         """
         if user_id is None:
             return False
-        user = self.yaapp_alchemy_session.query(User).get(user_id)
+        user = self.redis_listener.yaapp_alchemy_session.query(User).get(user_id)
         return user.userprofile.hd_enabled
 
     def start_radio(self, radio_uuid):
@@ -692,8 +693,8 @@ class RadioScheduler():
         # update radio state with master streamer ref
         song_id = radio_state.song_id
         song_play_time = radio_state.play_time
-        song = self.yaapp_alchemy_session.query(SongInstance).get(song_id)
-        yasound_song = self.yasound_alchemy_session.query(YasoundSong).get(song.song_metadata.yasound_song_id)
+        song = self.redis_listener.yaapp_alchemy_session.query(SongInstance).get(song_id)
+        yasound_song = self.redis_listener.yasound_alchemy_session.query(YasoundSong).get(song.song_metadata.yasound_song_id)
         track = Track(yasound_song.filename, yasound_song.duration, song=song)
         delay = 0  # FIXME: or self.SONG_PREPARE_DURATION ?
         elapsed_timedelta = self.current_step_time - song_play_time
@@ -815,7 +816,7 @@ class RadioScheduler():
         url_params = {'key': settings.SCHEDULER_KEY}
         if user_id is not None and user_id != '':
             user_id = int(user_id)
-            user = self.yaapp_alchemy_session.query(User).get(user_id)
+            user = self.redis_listener.yaapp_alchemy_session.query(User).get(user_id)
             if user is not None:
                 url_params['username'] = user.username
                 url_params['api_key'] = user.api_key.key
@@ -861,7 +862,7 @@ class RadioScheduler():
                         'listening_duration': seconds
         }
         if user_id is not None:
-            user = self.yaapp_alchemy_session.query(User).get(user_id)
+            user = self.redis_listener.yaapp_alchemy_session.query(User).get(user_id)
             url_params['username'] = user.username
             url_params['api_key'] = user.api_key.key
         url = settings.YASOUND_SERVER + '/api/v1/radio/%s/stop_listening/' % (radio_uuid,)
