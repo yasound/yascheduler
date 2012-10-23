@@ -12,7 +12,6 @@ def prod():
 
     env.forward_agent = 'True'
     env.hosts = [
-        'yas-web-08.ig-1.net',
         'yas-web-09.ig-1.net',
     ]
     env.user = "customer"
