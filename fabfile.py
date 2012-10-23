@@ -16,7 +16,7 @@ def prod():
         'yas-web-09.ig-1.net',
     ]
     env.user = "customer"
-    WEBSITE_PATH = "/data/vhosts/y/yascheduler/root/"
+    WEBSITE_PATH = "/data/vhosts/y/yascheduler/"
     APP_PATH = "yascheduler"
     GIT_PATH = "git@github.com:yasound/yascheduler.git"
     BRANCH = "master"
