@@ -31,7 +31,7 @@ REDIS_DB = 0
 
 if PRODUCTION_MODE:
     REDIS_HOST = 'yas-sql-01'
-    REDIS_DB = 2
+    REDIS_DB = 3
 
 PROJECT_ROOT = abspath(dirname(__file__))
 LOG_DIRECTORY = os.path.join(PROJECT_ROOT, 'logs/')
