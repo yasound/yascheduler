@@ -538,6 +538,10 @@ class RadioScheduler():
             # radio already exists
             master_streamer = radio_state.master_streamer
             message = self.publisher.send_radio_exists_message(radio_uuid, streamer, master_streamer)
+
+        # #FIXME: to check...
+        if self.radio_events.find({'radio_uuid': radio_uuid, 'type': self.EVENT_TYPE_NEW_TRACK_PREPARE}).count() == 0:
+            self.prepare_track(radio_uuid, 0, 0)
         return message
 
     def receive_stop_radio_message(self, data):
