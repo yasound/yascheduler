@@ -76,11 +76,11 @@ elif TEST_MODE:
     yaapp_alchemy_engine = create_engine('sqlite+pysqlite:////%s' % yaapp_db_path)
     yasound_alchemy_engine = create_engine('sqlite+pysqlite:////%s' % yasound_db_path)
 
-yaapp_session_maker = sessionmaker()
-yaapp_session_maker.configure(bind=yaapp_alchemy_engine)
+# yaapp_session_maker = sessionmaker()
+# yaapp_session_maker.configure(bind=yaapp_alchemy_engine)
 
-yasound_session_maker = sessionmaker()
-yasound_session_maker.configure(bind=yasound_alchemy_engine)
+# yasound_session_maker = sessionmaker()
+# yasound_session_maker.configure(bind=yasound_alchemy_engine)
 
 # mongodb
 from pymongo.connection import Connection
