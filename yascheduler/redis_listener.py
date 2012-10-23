@@ -4,7 +4,8 @@ import redis
 import time
 import json
 from logger import Logger
-from settings import yaapp_session_maker, yasound_session_maker
+from sqlalchemy.orm import scoped_session
+from sqlalchemy.orm import sessionmaker
 
 class RedisListener(Thread):
     WAIT_TIME = 0.020  # seconds
@@ -26,8 +27,14 @@ class RedisListener(Thread):
         self.radio_scheduler = radio_scheduler
         self.logger = Logger().log
 
-        self.yaapp_alchemy_session = yaapp_session_maker()
-        self.yasound_alchemy_session = yasound_session_maker()
+        session_factory = sessionmaker(bind=settings.yaapp_alchemy_engine)
+        self.yaapp_alchemy_session = scoped_session(session_factory)
+
+        session_factory = sessionmaker(bind=settings.yasound_alchemy_engine)
+        self.yasound_alchemy_session = scoped_session(session_factory)
+
+        # self.yaapp_alchemy_session = yaapp_session_maker()
+        # self.yasound_alchemy_session = yasound_session_maker()
 
     def run(self):
         self.logger.debug('Redis listener run...')
