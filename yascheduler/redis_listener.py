@@ -4,6 +4,7 @@ import redis
 import time
 import json
 from logger import Logger
+from settings import yaapp_session_maker, yasound_session_maker
 
 class RedisListener(Thread):
     WAIT_TIME = 0.020  # seconds
@@ -24,6 +25,9 @@ class RedisListener(Thread):
         Thread.__init__(self)
         self.radio_scheduler = radio_scheduler
         self.logger = Logger().log
+
+        self.yaapp_alchemy_session = yaapp_session_maker()
+        self.yasound_alchemy_session = yasound_session_maker()
 
     def run(self):
         self.logger.debug('Redis listener run...')
