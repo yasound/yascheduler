@@ -1,6 +1,6 @@
 import settings
 from logger import Logger
-from settings import yaapp_session_maker, yasound_session_maker
+# from settings import yaapp_session_maker, yasound_session_maker
 from models.yaapp_alchemy_models import Radio, Playlist, SongInstance, SongMetadata
 from models.yasound_alchemy_models import YasoundSong
 from models.account_alchemy_models import User
@@ -17,6 +17,8 @@ from redis_listener import RedisListener
 from track import Track
 from redis_publisher import RedisPublisher
 from radio_state import RadioStateManager, RadioState
+from sqlalchemy.orm import scoped_session
+from sqlalchemy.orm import sessionmaker
 
 
 class RadioScheduler():
@@ -55,8 +57,13 @@ class RadioScheduler():
         self.listeners.ensure_index('radio_uuid')
         self.listeners.ensure_index('session_id', unique=True)
 
-        self.yaapp_alchemy_session = yaapp_session_maker()
-        self.yasound_alchemy_session = yasound_session_maker()
+        # self.yaapp_alchemy_session = yaapp_session_maker()
+        # self.yasound_alchemy_session = yasound_session_maker()
+        session_factory = sessionmaker(bind=settings.yaapp_alchemy_engine)
+        self.yaapp_alchemy_session = scoped_session(session_factory)
+
+        session_factory = sessionmaker(bind=settings.yasound_alchemy_engine)
+        self.yasound_alchemy_session = scoped_session(session_factory)
 
         self.shows = settings.MONGO_DB.shows
 
