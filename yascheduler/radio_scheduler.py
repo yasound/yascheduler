@@ -89,6 +89,7 @@ class RadioScheduler():
         # flush if needed
         if self.flush_before_run:
             self.flush()
+	    return
 
         # starts streamer checker thread
         if self.enable_ping_streamers:
@@ -516,7 +517,6 @@ class RadioScheduler():
         streamer = data.get('streamer', None)
         if radio_uuid is None or streamer is None:
             return
-        import pdb;pdb.set_trace()
         if self.redis_listener.yaapp_alchemy_session.query(Radio).filter(Radio.uuid == radio_uuid).count() == 0:
             # radio unknown: send 'radio_unknpwn' message to the streamer
             message = self.publisher.send_radio_unknown_message(radio_uuid, streamer)
