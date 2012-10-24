@@ -83,8 +83,9 @@ class RadioScheduler():
         self.listeners.drop()
 
     def flush(self):
+        self.logger.debug('flush...')
         self.clear_mongo()
-        self.check_existing_radios()
+        self.logger.debug('flushed')
 
     def run(self):
         self.last_step_time = datetime.now()
@@ -96,7 +97,7 @@ class RadioScheduler():
         # flush if needed
         if self.flush_before_run:
             self.flush()
-	    return
+            return
 
         # starts streamer checker thread
         if self.enable_ping_streamers:
