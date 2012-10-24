@@ -763,6 +763,7 @@ class RadioScheduler():
         self.radio_events.insert(event, safe=True)
 
     def check_existing_radios(self):
+        self.logger.debug('*** check existing radios: add new radios and remove deleted radios')
         scheduler_radio_uuids = set(self.radio_state_manager.radio_states.find().distinct('radio_uuid'))
         radios = self.yaapp_alchemy_session.query(Radio).filter(Radio.ready == True)
         db_radio_uuids = set([r.uuid for r in radios])
@@ -778,6 +779,8 @@ class RadioScheduler():
 
         for uuid in to_add:
             self.start_radio(uuid)
+
+        self.logger.debug('*** check existing radios: DONE')
 
     def clean_radio_events(self, radio_uuid):
         self.lock.acquire(True)
