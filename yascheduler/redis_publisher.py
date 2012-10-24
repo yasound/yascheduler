@@ -82,7 +82,7 @@ class RedisPublisher():
         self.send_message(message, dest_streamer)
 
     def send_message(self, message, streamer=None):
-        self.logger.debug('SEND ***%s*** message          dest_streamer = %s  data = %s' % (message.get('type', None), streamer, message))
+        self.logger.debug('###%s### sent          dest_streamer = %s  data = %s' % (message.get('type', None), streamer, message))
         m = json.dumps(message)
         channel = self.redis_publish_channel
         if streamer is not None:

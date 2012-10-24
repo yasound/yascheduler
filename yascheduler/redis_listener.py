@@ -51,7 +51,7 @@ class RedisListener(Thread):
                 data = json.loads(data_str)
 
                 message_type = data.get('type', None)
-                self.logger.debug('redis message %s RECEIVED       data = %s' % (message_type, data))
+                self.logger.debug('###%s### received        data = %s' % (message_type, data))
 
                 if message_type == self.TYPE_MESSAGE_TEST:
                     self.radio_scheduler.receive_test_message(data)
@@ -72,6 +72,6 @@ class RedisListener(Thread):
                 elif message_type == self.TYPE_MESSAGE_UNREGISTER_LISTENER:
                     self.radio_scheduler.receive_unregister_listener_message(data)
 
-                self.logger.debug('redis message %s HANDLED' % message_type)
+                self.logger.debug('###%s### handled' % message_type)
         except Exception, err:
             self.logger.info('RedisListener exception: %s' % str(err))
