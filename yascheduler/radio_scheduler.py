@@ -266,7 +266,7 @@ class RadioScheduler():
         song_id = event.get('song_id', None)
         show_id = event.get('show_id', None)
 
-        self.logger('track start (%s - %s)' % (radio_uuid, song_id))
+        self.logger.debug('track start (%s - %s)' % (radio_uuid, song_id))
 
         radio_state = self.radio_state_manager.radio_state(radio_uuid)
         radio_state.song_id = song_id
