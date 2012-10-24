@@ -261,9 +261,12 @@ class RadioScheduler():
         # self.logger.info('track start %s' % datetime.now().time().isoformat())
         radio_uuid = event.get('radio_uuid', None)
         if not radio_uuid:
+            self.logger.debug('handle_new_track_start ERROR: radio uuid is none in event')
             return
         song_id = event.get('song_id', None)
         show_id = event.get('show_id', None)
+
+        self.logger('track start (%s - %s)' % (radio_uuid, song_id))
 
         radio_state = self.radio_state_manager.radio_state(radio_uuid)
         radio_state.song_id = song_id
@@ -335,9 +338,11 @@ class RadioScheduler():
         3 - send it to the streamer
         4 - create next 'track prepare' event
         """
+        self.logger.debug('prepare track (%s)' % radio_uuid)
         # 1 get next track
         track = self.get_next_track(radio_uuid, delay_before_play)
         if track is None:
+            self.logger.debug('prepare_track ERROR: cannot get next track')
             return None
         track_filename = track.filename
         offset = 0
