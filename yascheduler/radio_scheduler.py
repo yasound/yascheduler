@@ -268,7 +268,7 @@ class RadioScheduler():
 
         song = self.yaapp_alchemy_session.query(SongInstance).get(song_id)
         yasound_song = self.yasound_alchemy_session.query(YasoundSong).get(song.song_metadata.yasound_song_id)
-        track = Track(yasound_song.filename, yasound_song.duration, song=song)
+        track = Track(yasound_song.filename, yasound_song.duration, song_id=song_id)
         self.play_track(radio_uuid, track, delay_before_play, offset, crossfade_duration)
 
     def handle_new_track_start(self, event):
@@ -379,9 +379,9 @@ class RadioScheduler():
                 'filename': track_filename,
         }
         if track.is_song:
-            event['song_id'] = track.song.id  # add the song id in the event if the track is a song
+            event['song_id'] = track.song_id  # add the song id in the event if the track is a song
         if track.is_from_show:
-            event['show_id'] = track.show
+            event['show_id'] = track.show_id
         self.lock.acquire(True)
         self.radio_events.insert(event, safe=True)
         self.lock.release()
@@ -496,7 +496,7 @@ class RadioScheduler():
         # debug duration
         b = datetime.now()
         #
-        frequencies = [x[0] for x in query.values(SongInstance.frequency)]
+        songs_data = list(query.values(SongInstance.frequency, SongInstance.id))
         # debug duration
         elapsed = datetime.now() - b
         self.logger.debug('---- %s make frequency list' % elapsed)
@@ -505,7 +505,7 @@ class RadioScheduler():
         # debug duration
         b = datetime.now()
         #
-        count = len(frequencies)
+        count = len(songs_data)
         # debug duration
         elapsed = datetime.now() - b
         self.logger.debug('---- %s count' % elapsed)
@@ -525,7 +525,7 @@ class RadioScheduler():
             # debug duration
             b = datetime.now()
             #
-            frequencies = [x[0] for x in query.values(SongInstance.frequency)]
+            songs_data = list(query.values(SongInstance.frequency, SongInstance.id))
             # debug duration
             elapsed = datetime.now() - b
             self.logger.debug('---- %s make frequency list (2)' % elapsed)
@@ -534,7 +534,7 @@ class RadioScheduler():
             # debug duration
             b = datetime.now()
             #
-            count = len(frequencies)
+            count = len(songs_data)
             # debug duration
             elapsed = datetime.now() - b
             self.logger.debug('---- %s count (2)' % elapsed)
@@ -567,7 +567,7 @@ class RadioScheduler():
             date_factor_func = lambda x: 1
         else:
             date_factor_func = lambda x: ((last_idx_factor - first_idx_factor) / (count - 1)) * x + first_idx_factor
-        weights = [x * x * date_factor_func(idx) for idx, x in enumerate(frequencies)]
+        weights = [data[0] * data[0] * date_factor_func(idx) for idx, data in enumerate(songs_data)]
         r = random.random()
         sum_weight = sum(weights)
         rnd = r * sum_weight
@@ -594,20 +594,19 @@ class RadioScheduler():
         # debug duration
         b = datetime.now()
         #
-        song = query.limit(index + 1)[index]
+        # song = query.limit(index + 1)[index]
+        song_id = songs_data[index][1]
+        metadata_id = list(self.yaapp_alchemy_session.query(SongInstance).filter(SongInstance.id == song_id).values(SongInstance.metadata_id))[0][0]
+        y_id = list(self.yaapp_alchemy_session.query(SongMetadata).filter(SongMetadata.id == metadata_id).values(SongMetadata.yasound_song_id))[0][0]
+        yasound_song_data = list(self.yasound_alchemy_session.query(YasoundSong).filter(YasoundSong.id == y_id).values(YasoundSong.filename, YasoundSong.duration))[0]
+        filename = yasound_song_data[0]
+        duration = yasound_song_data[1]
         # debug duration
         elapsed = datetime.now() - b
-        self.logger.debug('---- %s get chosen song instance' % elapsed)
+        self.logger.debug('----- %s get filename and duration' % elapsed)
         #
-        # debug duration
-        b = datetime.now()
-        #
-        yasound_song = self.yasound_alchemy_session.query(YasoundSong).get(song.song_metadata.yasound_song_id)
-        # debug duration
-        elapsed = datetime.now() - b
-        self.logger.debug('---- %s get yasound song' % elapsed)
-        #
-        track = Track(yasound_song.filename, yasound_song.duration, song=song)
+
+        track = Track(filename, duration, song_id=song_id)
 
 
         # debug duration
@@ -641,7 +640,7 @@ class RadioScheduler():
         random_play = show['random_play']
         if random_play:
             track = self.get_random_song(playlist, play_time)
-            track.show = show
+            track.show_id = show_id
         else:
             radio_state = self.radio_state_manager.radio_state(radio_uuid)
             previous_order = 0
@@ -653,7 +652,7 @@ class RadioScheduler():
             if song is None:
                 return None
             yasound_song = self.yasound_alchemy_session.query(YasoundSong).get(song.song_metadata.yasound_song_id)
-            track = Track(yasound_song.filename, yasound_song.duration, song=song, show=show)
+            track = Track(yasound_song.filename, yasound_song.duration, song_id=song.id, show_id=show_id)
         return track
 
     def get_radio_jingle_track(self, radio_uuid):
@@ -869,7 +868,7 @@ class RadioScheduler():
         song_play_time = radio_state.play_time
         song = self.yaapp_alchemy_session.query(SongInstance).get(song_id)
         yasound_song = self.yasound_alchemy_session.query(YasoundSong).get(song.song_metadata.yasound_song_id)
-        track = Track(yasound_song.filename, yasound_song.duration, song=song)
+        track = Track(yasound_song.filename, yasound_song.duration, song_id=song_id)
         delay = 0  # FIXME: or self.SONG_PREPARE_DURATION ?
         elapsed_timedelta = self.current_step_time - song_play_time
         offset = delay + elapsed_timedelta.days * (24 * 60 * 60) + elapsed_timedelta.seconds + elapsed_timedelta.microseconds / 1000000.0
