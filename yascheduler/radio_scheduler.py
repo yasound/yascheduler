@@ -27,6 +27,7 @@ class RadioScheduler():
     EVENT_TYPE_NEW_TRACK_START = 'start_new_track'
     EVENT_TYPE_TRACK_CONTINUE = 'continue_track'
     EVENT_TYPE_CHECK_EXISTING_RADIOS = 'check_existing_radios'
+    EVENT_TYPE_CHECK_PROGRAMMING = 'check_programming'
 
     STREAMER_PING_STATUS_OK = 'ok'
     STREAMER_PING_STATUS_WAITING = 'waiting'
@@ -36,13 +37,18 @@ class RadioScheduler():
     SONG_PREPARE_DURATION = 5  # seconds
     CROSSFADE_DURATION = 1  # seconds
     CHECK_EXISTING_RADIOS_PERIOD = 10 * 60
+    CHECK_PROGRAMMING_PERIOD = 30
 
-    def __init__(self, enable_ping_streamers=True, flush=False):
+    def __init__(self, enable_ping_streamers=True, flush=False, enable_programming_check=False):
+        self.current_step_time = datetime.now()
+        self.last_step_time = self.current_step_time
+
         self.logger = Logger().log
         self.publisher = RedisPublisher('yastream')
 
         self.enable_ping_streamers = enable_ping_streamers
         self.flush_before_run = flush
+        self.enable_programming_check = enable_programming_check
 
         self.mongo_scheduler = settings.MONGO_DB.scheduler
 
@@ -66,9 +72,6 @@ class RadioScheduler():
         self.yasound_alchemy_session = scoped_session(session_factory)
 
         self.shows = settings.MONGO_DB.shows
-
-        self.current_step_time = datetime.now()
-        self.last_step_time = self.current_step_time
 
         self.lock = Lock()
 
@@ -130,6 +133,10 @@ class RadioScheduler():
         if check_event_count == 0:
             self.add_next_check_radios_event(self.CHECK_EXISTING_RADIOS_PERIOD)
 
+        # add the event to check if there is no problem with radios' programming
+        if self.enable_programming_check:
+            self.add_next_check_programming_event(self.CHECK_PROGRAMMING_PERIOD)
+
         quit = False
         while not quit:
             self.current_step_time = datetime.now()
@@ -179,8 +186,15 @@ class RadioScheduler():
             self.handle_track_continue(event)
         elif event_type == self.EVENT_TYPE_CHECK_EXISTING_RADIOS:
             self.handle_check_existing_radios(event)
+        elif event_type == self.EVENT_TYPE_CHECK_PROGRAMMING:
+            self.handle_check_programming(event)
         else:
             self.logger.info('event "%s" can not be handled: unknown type' % event)
+
+    def handle_check_programming(self, event):
+        self.check_programming()
+        # add next check event
+        self.add_next_check_programming_event(self.CHECK_PROGRAMMING_PERIOD)
 
     def handle_check_existing_radios(self, event):
         self.check_existing_radios()
@@ -766,6 +780,23 @@ class RadioScheduler():
                     'date': date
                 }
         self.radio_events.insert(event, safe=True)
+
+    def add_next_check_programming_event(self, seconds):
+        date = datetime.now() + timedelta(seconds=seconds)
+        event = {
+                    'type': self.EVENT_TYPE_CHECK_PROGRAMMING,
+                    'date': date
+                }
+        self.radio_events.insert(event, safe=True)
+
+    def check_programming(self):
+        self.logger.info('### check radios programming: verify that every radio will receive "prepare track" event in the furute')
+        scheduler_radio_uuids = self.radio_state_manager.radio_states.find().distinct('radio_uuid')
+        for uuid in scheduler_radio_uuids:
+            event_count = self.radio_events.find({'type': self.EVENT_TYPE_NEW_TRACK_PREPARE, 'radio_uuid': uuid}).count()
+            if event_count == 0:
+                self.logger.info('!!!!! radio %s: programming broken' % uuid)
+        self.logger.info('### check radios programming: DONE')
 
     def check_existing_radios(self):
         self.logger.debug('*** check existing radios: add new radios and remove deleted radios')
