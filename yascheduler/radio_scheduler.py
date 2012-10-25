@@ -348,7 +348,7 @@ class RadioScheduler():
 
         # debug duration
         elapsed = datetime.now() - begin
-        self.logger.debug('- play_track DURATION: %s' % elapsed)
+        self.logger.debug('- %s play_track' % elapsed)
         #
         return message
 
@@ -392,7 +392,7 @@ class RadioScheduler():
 
         # debug duration
         elapsed = datetime.now() - begin
-        self.logger.debug('prepare_track DURATION: %s\n' % elapsed)
+        self.logger.debug('%s prepare_track\n' % elapsed)
         #
         return message  # for test purpose
 
@@ -435,7 +435,7 @@ class RadioScheduler():
                         break
         # debug duration
         elapsed = datetime.now() - begin
-        self.logger.debug('-- get_current_show DURATION: %s' % elapsed)
+        self.logger.debug('-- %s get_current_show' % elapsed)
         #
         return current
 
@@ -465,7 +465,7 @@ class RadioScheduler():
 
         # debug duration
         elapsed = datetime.now() - begin
-        self.logger.debug('- get_next_track DURATION: %s' % elapsed)
+        self.logger.debug('- %s get_next_track' % elapsed)
         #
         return track
 
@@ -490,8 +490,9 @@ class RadioScheduler():
         count = query.count()
         # debug duration
         elapsed = datetime.now() - b
-        self.logger.debug('---- count song instances DURATION: %s' % elapsed)
+        self.logger.debug('---- %s count song instances' % elapsed)
         #
+
         if count == 0:  # try without time limit
             # debug duration
             b = datetime.now()
@@ -500,13 +501,13 @@ class RadioScheduler():
             count = query.count()
             # debug duration
             elapsed = datetime.now() - b
-            self.logger.debug('---- count song instances (without time limit) DURATION: %s' % elapsed)
+            self.logger.debug('---- %s count song instances (without time limit)' % elapsed)
             #
         if count == 0:
             self.logger.info('no song available for playlist %d' % playlist.id)
             # debug duration
             elapsed = datetime.now() - begin
-            self.logger.debug('--- get_random_song (exit 1) DURATION: %s' % elapsed)
+            self.logger.debug('--- %s get_random_song (exit 1)' % elapsed)
             #
             return None
 
@@ -516,7 +517,7 @@ class RadioScheduler():
         frequencies = [x[0] for x in query.values(SongInstance.frequency)]
         # debug duration
         elapsed = datetime.now() - b
-        self.logger.debug('---- get song instances DURATION: %s' % elapsed)
+        self.logger.debug('---- %s get song instances' % elapsed)
         #
 
         # debug duration
@@ -546,12 +547,12 @@ class RadioScheduler():
             else:
                 # debug duration
                 elapsed = datetime.now() - begin
-                self.logger.debug('--- get_random_song (exit 2) DURATION: %s' % elapsed)
+                self.logger.debug('--- %s get_random_song (exit 2)' % elapsed)
                 #
                 return None
         # debug duration
         elapsed = datetime.now() - b
-        self.logger.debug('---- find song instance index DURATION: %s' % elapsed)
+        self.logger.debug('---- %s find song instance index' % elapsed)
         #
 
         # debug duration
@@ -560,7 +561,7 @@ class RadioScheduler():
         song = query.limit(index + 1)[index]
         # debug duration
         elapsed = datetime.now() - b
-        self.logger.debug('---- get chosen song instance DURATION: %s' % elapsed)
+        self.logger.debug('---- %s get chosen song instance' % elapsed)
         #
         # debug duration
         b = datetime.now()
@@ -568,14 +569,14 @@ class RadioScheduler():
         yasound_song = self.yasound_alchemy_session.query(YasoundSong).get(song.song_metadata.yasound_song_id)
         # debug duration
         elapsed = datetime.now() - b
-        self.logger.debug('---- get yasound song DURATION: %s' % elapsed)
+        self.logger.debug('---- %s get yasound song' % elapsed)
         #
         track = Track(yasound_song.filename, yasound_song.duration, song=song)
 
 
         # debug duration
         elapsed = datetime.now() - begin
-        self.logger.debug('--- get_random_song DURATION: %s' % elapsed)
+        self.logger.debug('--- %s get_random_song' % elapsed)
         #
         return track
 
@@ -589,7 +590,7 @@ class RadioScheduler():
         track = self.get_random_song(playlist, play_time)
         # debug duration
         elapsed = datetime.now() - begin
-        self.logger.debug('-- get_song_default DURATION: %s' % elapsed)
+        self.logger.debug('-- %s get_song_default' % elapsed)
         #
         return track
 
