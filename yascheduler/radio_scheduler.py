@@ -487,10 +487,28 @@ class RadioScheduler():
         b = datetime.now()
         #
         query = self.yaapp_alchemy_session.query(SongInstance).join(SongMetadata).filter(SongInstance.playlist_id == playlist.id, SongInstance.enabled == True, or_(SongInstance.last_play_time < time_limit, SongInstance.last_play_time == None), SongMetadata.yasound_song_id > 0).order_by(SongInstance.last_play_time)
-        count = query.count()
         # debug duration
         elapsed = datetime.now() - b
-        self.logger.debug('---- %s count song instances' % elapsed)
+        self.logger.debug('---- %s make query' % elapsed)
+        #
+        # count = query.count()
+
+        # debug duration
+        b = datetime.now()
+        #
+        frequencies = [x[0] for x in query.values(SongInstance.frequency)]
+        # debug duration
+        elapsed = datetime.now() - b
+        self.logger.debug('---- %s make frequency list' % elapsed)
+        #
+
+        # debug duration
+        b = datetime.now()
+        #
+        count = len(frequencies)
+        # debug duration
+        elapsed = datetime.now() - b
+        self.logger.debug('---- %s count' % elapsed)
         #
 
         if count == 0:  # try without time limit
@@ -498,10 +516,28 @@ class RadioScheduler():
             b = datetime.now()
             #
             query = self.yaapp_alchemy_session.query(SongInstance).join(SongMetadata).filter(SongInstance.playlist_id == playlist.id, SongInstance.enabled == True, SongMetadata.yasound_song_id > 0).order_by(SongInstance.last_play_time)
-            count = query.count()
             # debug duration
             elapsed = datetime.now() - b
-            self.logger.debug('---- %s count song instances (without time limit)' % elapsed)
+            self.logger.debug('---- %s make query (2)' % elapsed)
+            #
+            # count = query.count()
+
+            # debug duration
+            b = datetime.now()
+            #
+            frequencies = [x[0] for x in query.values(SongInstance.frequency)]
+            # debug duration
+            elapsed = datetime.now() - b
+            self.logger.debug('---- %s make frequency list (2)' % elapsed)
+            #
+
+            # debug duration
+            b = datetime.now()
+            #
+            count = len(frequencies)
+            # debug duration
+            elapsed = datetime.now() - b
+            self.logger.debug('---- %s count (2)' % elapsed)
             #
         if count == 0:
             self.logger.info('no song available for playlist %d' % playlist.id)
@@ -511,14 +547,14 @@ class RadioScheduler():
             #
             return None
 
-        # debug duration
-        b = datetime.now()
-        #
-        frequencies = [x[0] for x in query.values(SongInstance.frequency)]
-        # debug duration
-        elapsed = datetime.now() - b
-        self.logger.debug('---- %s get song instances' % elapsed)
-        #
+        # # debug duration
+        # b = datetime.now()
+        # #
+        # frequencies = [x[0] for x in query.values(SongInstance.frequency)]
+        # # debug duration
+        # elapsed = datetime.now() - b
+        # self.logger.debug('---- %s get song instances' % elapsed)
+        # #
 
         # debug duration
         b = datetime.now()
