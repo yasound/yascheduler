@@ -1,5 +1,5 @@
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime
+from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, SmallInteger
 from sqlalchemy import ForeignKey
 from sqlalchemy.orm import relationship
 
@@ -15,6 +15,7 @@ class Radio(Base):
     current_song_id = Column(Integer, ForeignKey('yabase_songinstance.id'))
     current_song = relationship('SongInstance')
     ready = Column(Boolean)
+    origin = Column(SmallInteger)
 
     def __init__(self, name, uuid=''):
         self.name = name
