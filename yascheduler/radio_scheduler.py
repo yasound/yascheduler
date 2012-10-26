@@ -397,14 +397,14 @@ class RadioScheduler():
         #
         return message  # for test purpose
 
-    def get_current_show(self, radio, play_time):
+    def get_current_show(self, radio_id, play_time):
         """
         get current show if exists
         """
         # debug duration
         begin = datetime.now()
         #
-        playlists = self.yaapp_alchemy_session.query(Playlist).filter(Playlist.radio_id == radio.id)
+        playlists = self.yaapp_alchemy_session.query(Playlist).filter(Playlist.radio_id == radio_id)
         playlist_ids = [x[0] for x in playlists.values(Playlist.id)]
         shows = self.shows.find({'playlist_id': {'$in': playlist_ids}, 'enabled': True}).sort([('time', DESCENDING)])
         current = None
@@ -436,7 +436,7 @@ class RadioScheduler():
                         break
         # debug duration
         elapsed = datetime.now() - begin
-        self.logger.debug('-- %s get_current_show' % elapsed)
+        self.logger.debug('---- %s get_current_show' % elapsed)
         #
         return current
 
@@ -449,20 +449,52 @@ class RadioScheduler():
         #
         play_time = self.current_step_time + timedelta(seconds=delay_before_play)
 
-        radio = self.yaapp_alchemy_session.query(Radio).filter(Radio.uuid == radio_uuid).first()
+        # debug duration
+        b = datetime.now()
+        #
+        radios_data = list(self.yaapp_alchemy_session.query(Radio).filter(Radio.uuid == radio_uuid).values(Radio.id))
+        if len(radios_data) == 0:
+            return None
+        radio_id = radios_data[0][0]
+        # debug duration
+        elapsed = datetime.now() - b
+        self.logger.debug('-- %s get radio id' % elapsed)
+        #
 
+        # debug duration
+        b = datetime.now()
+        #
         track = None
         if track is None:  # 1 check if we have to play an inter-song jingle
             track = self.get_radio_jingle_track(radio_uuid)
+        # debug duration
+        elapsed = datetime.now() - b
+        self.logger.debug('-- %s jingle' % elapsed)
+        #
 
+
+        # debug duration
+        b = datetime.now()
+        #
         if track is None:  # 2 check if we must be playing a show
             # check if one of the radio shows is currently 'on air'
-            show_current = self.get_current_show(radio, play_time)
+            show_current = self.get_current_show(radio_id, play_time)
             if show_current:
                 track = self.get_song_in_show(radio_uuid, show_current['_id'], play_time)
+        # debug duration
+        elapsed = datetime.now() - b
+        self.logger.debug('-- %s show' % elapsed)
+        #
 
+        # debug duration
+        b = datetime.now()
+        #
         if track is None:  # 3 choose a song in the default playlist
-            track = self.get_song_default(radio.id, play_time)
+            track = self.get_song_default(radio_id, play_time)
+        # debug duration
+        elapsed = datetime.now() - b
+        self.logger.debug('-- %s song default' % elapsed)
+        #
 
         # debug duration
         elapsed = datetime.now() - begin
@@ -490,7 +522,7 @@ class RadioScheduler():
         query = self.yaapp_alchemy_session.query(SongInstance).join(SongMetadata).filter(SongInstance.playlist_id == playlist_id, SongInstance.enabled == True, or_(SongInstance.last_play_time < time_limit, SongInstance.last_play_time == None), SongMetadata.yasound_song_id > 0).order_by(SongInstance.last_play_time)
         # debug duration
         elapsed = datetime.now() - b
-        self.logger.debug('---- %s make query' % elapsed)
+        self.logger.debug('-------- %s make query' % elapsed)
         #
         # count = query.count()
 
@@ -500,7 +532,7 @@ class RadioScheduler():
         songs_data = list(query.values(SongInstance.frequency, SongInstance.id))
         # debug duration
         elapsed = datetime.now() - b
-        self.logger.debug('---- %s make frequency list' % elapsed)
+        self.logger.debug('-------- %s make frequency list' % elapsed)
         #
 
         # debug duration
@@ -509,7 +541,7 @@ class RadioScheduler():
         count = len(songs_data)
         # debug duration
         elapsed = datetime.now() - b
-        self.logger.debug('---- %s count' % elapsed)
+        self.logger.debug('-------- %s count' % elapsed)
         #
 
         if count == 0:  # try without time limit
@@ -519,7 +551,7 @@ class RadioScheduler():
             query = self.yaapp_alchemy_session.query(SongInstance).join(SongMetadata).filter(SongInstance.playlist_id == playlist_id, SongInstance.enabled == True, SongMetadata.yasound_song_id > 0).order_by(SongInstance.last_play_time)
             # debug duration
             elapsed = datetime.now() - b
-            self.logger.debug('---- %s make query (2)' % elapsed)
+            self.logger.debug('-------- %s make query (2)' % elapsed)
             #
             # count = query.count()
 
@@ -529,7 +561,7 @@ class RadioScheduler():
             songs_data = list(query.values(SongInstance.frequency, SongInstance.id))
             # debug duration
             elapsed = datetime.now() - b
-            self.logger.debug('---- %s make frequency list (2)' % elapsed)
+            self.logger.debug('-------- %s make frequency list (2)' % elapsed)
             #
 
             # debug duration
@@ -538,13 +570,13 @@ class RadioScheduler():
             count = len(songs_data)
             # debug duration
             elapsed = datetime.now() - b
-            self.logger.debug('---- %s count (2)' % elapsed)
+            self.logger.debug('-------- %s count (2)' % elapsed)
             #
         if count == 0:
             self.logger.info('no song available for playlist %d' % playlist_id)
             # debug duration
             elapsed = datetime.now() - begin
-            self.logger.debug('--- %s get_random_song (exit 1)' % elapsed)
+            self.logger.debug('------ %s get_random_song (exit 1)' % elapsed)
             #
             return None
 
@@ -554,7 +586,7 @@ class RadioScheduler():
         # frequencies = [x[0] for x in query.values(SongInstance.frequency)]
         # # debug duration
         # elapsed = datetime.now() - b
-        # self.logger.debug('---- %s get song instances' % elapsed)
+        # self.logger.debug('-------- %s get song instances' % elapsed)
         # #
 
         # debug duration
@@ -584,12 +616,12 @@ class RadioScheduler():
             else:
                 # debug duration
                 elapsed = datetime.now() - begin
-                self.logger.debug('--- %s get_random_song (exit 2)' % elapsed)
+                self.logger.debug('------ %s get_random_song (exit 2)' % elapsed)
                 #
                 return None
         # debug duration
         elapsed = datetime.now() - b
-        self.logger.debug('---- %s find song instance index' % elapsed)
+        self.logger.debug('-------- %s find song instance index' % elapsed)
         #
 
         # debug duration
@@ -604,7 +636,7 @@ class RadioScheduler():
         duration = yasound_song_data[1]
         # debug duration
         elapsed = datetime.now() - b
-        self.logger.debug('---- %s get filename and duration' % elapsed)
+        self.logger.debug('-------- %s get filename and duration' % elapsed)
         #
 
         track = Track(filename, duration, song_id=song_id)
@@ -612,7 +644,7 @@ class RadioScheduler():
 
         # debug duration
         elapsed = datetime.now() - begin
-        self.logger.debug('--- %s get_random_song' % elapsed)
+        self.logger.debug('------ %s get_random_song' % elapsed)
         #
         return track
 
@@ -631,7 +663,7 @@ class RadioScheduler():
         track = self.get_random_song(playlist_id, play_time)
         # debug duration
         elapsed = datetime.now() - begin
-        self.logger.debug('-- %s get_song_default' % elapsed)
+        self.logger.debug('---- %s get_song_default' % elapsed)
         #
         return track
 
