@@ -53,6 +53,7 @@ class RadioScheduler():
         self.mongo_scheduler = settings.MONGO_DB.scheduler
 
         self.radio_events = self.mongo_scheduler.radios.events
+        self.radio_events.ensure_index('radio_uuid')
 
         self.radio_state_manager = RadioStateManager()
 
@@ -603,7 +604,7 @@ class RadioScheduler():
         duration = yasound_song_data[1]
         # debug duration
         elapsed = datetime.now() - b
-        self.logger.debug('----- %s get filename and duration' % elapsed)
+        self.logger.debug('---- %s get filename and duration' % elapsed)
         #
 
         track = Track(filename, duration, song_id=song_id)
