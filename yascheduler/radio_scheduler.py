@@ -624,7 +624,7 @@ class RadioScheduler():
         # if not playlist:
         #     return None
 
-        playlists_data = self.yaapp_alchemy_session.query(Playlist).filter(Playlist.radio_id == radio_id, Playlist.name == 'default'),values(Playlist.id)
+        playlists_data = list(self.yaapp_alchemy_session.query(Playlist).filter(Playlist.radio_id == radio_id, Playlist.name == 'default').values(Playlist.id))
         if len(playlists_data) == 0:
             return None
         playlist_id = playlists_data[0][0]
