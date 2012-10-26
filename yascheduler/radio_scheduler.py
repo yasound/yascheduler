@@ -303,7 +303,7 @@ class RadioScheduler():
             url = settings.YASOUND_SERVER + '/api/v1/radio/%s/song/%d/played/' % (radio_uuid, song_id)
             response = requests.post(url, params={'key': settings.SCHEDULER_KEY})
             if response.status_code != 200:
-                self.logger.info('song played request failed for radio %s - song %d' % (radio_uuid, song_id)
+                self.logger.info('song played request failed for radio %s - song %d' % (radio_uuid, song_id))
 
     def handle_new_track_prepare(self, event):
         """
