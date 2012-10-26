@@ -470,7 +470,7 @@ class RadioScheduler():
         #
         return track
 
-    def get_random_song(self, playlist, play_time):
+    def get_random_song(self, playlist_id, play_time):
         """
         returns Track object
         """
@@ -478,7 +478,7 @@ class RadioScheduler():
         begin = datetime.now()
         #
         time_limit = play_time - timedelta(hours=3)
-        # SongInstance playlist == playlist
+        # SongInstance playlist.id == playlist_id
         # SongInstance enabled == True
         # SongInstance last_play_time is None or < time_limit
         # SongMetadata yasound_song_id > 0
@@ -487,7 +487,7 @@ class RadioScheduler():
         # debug duration
         b = datetime.now()
         #
-        query = self.yaapp_alchemy_session.query(SongInstance).join(SongMetadata).filter(SongInstance.playlist_id == playlist.id, SongInstance.enabled == True, or_(SongInstance.last_play_time < time_limit, SongInstance.last_play_time == None), SongMetadata.yasound_song_id > 0).order_by(SongInstance.last_play_time)
+        query = self.yaapp_alchemy_session.query(SongInstance).join(SongMetadata).filter(SongInstance.playlist_id == playlist_id, SongInstance.enabled == True, or_(SongInstance.last_play_time < time_limit, SongInstance.last_play_time == None), SongMetadata.yasound_song_id > 0).order_by(SongInstance.last_play_time)
         # debug duration
         elapsed = datetime.now() - b
         self.logger.debug('---- %s make query' % elapsed)
@@ -516,7 +516,7 @@ class RadioScheduler():
             # debug duration
             b = datetime.now()
             #
-            query = self.yaapp_alchemy_session.query(SongInstance).join(SongMetadata).filter(SongInstance.playlist_id == playlist.id, SongInstance.enabled == True, SongMetadata.yasound_song_id > 0).order_by(SongInstance.last_play_time)
+            query = self.yaapp_alchemy_session.query(SongInstance).join(SongMetadata).filter(SongInstance.playlist_id == playlist_id, SongInstance.enabled == True, SongMetadata.yasound_song_id > 0).order_by(SongInstance.last_play_time)
             # debug duration
             elapsed = datetime.now() - b
             self.logger.debug('---- %s make query (2)' % elapsed)
@@ -541,7 +541,7 @@ class RadioScheduler():
             self.logger.debug('---- %s count (2)' % elapsed)
             #
         if count == 0:
-            self.logger.info('no song available for playlist %d' % playlist.id)
+            self.logger.info('no song available for playlist %d' % playlist_id)
             # debug duration
             elapsed = datetime.now() - begin
             self.logger.debug('--- %s get_random_song (exit 1)' % elapsed)
@@ -620,10 +620,15 @@ class RadioScheduler():
         # debug duration
         begin = datetime.now()
         #
-        playlist = self.yaapp_alchemy_session.query(Playlist).filter(Playlist.radio_id == radio_id, Playlist.name == 'default').first()
-        if not playlist:
+        # playlist = self.yaapp_alchemy_session.query(Playlist).filter(Playlist.radio_id == radio_id, Playlist.name == 'default').first()
+        # if not playlist:
+        #     return None
+
+        playlists_data = self.yaapp_alchemy_session.query(Playlist).filter(Playlist.radio_id == radio_id, Playlist.name == 'default'),values(Playlist.id)
+        if len(playlists_data) == 0:
             return None
-        track = self.get_random_song(playlist, play_time)
+        playlist_id = playlists_data[0][0]
+        track = self.get_random_song(playlist_id, play_time)
         # debug duration
         elapsed = datetime.now() - begin
         self.logger.debug('-- %s get_song_default' % elapsed)
@@ -635,12 +640,15 @@ class RadioScheduler():
         if show is None:
             return None
 
-        playlist = self.yaapp_alchemy_session.query(Playlist).get(show['playlist_id'])
-        if not playlist:
+        # playlist = self.yaapp_alchemy_session.query(Playlist).get(show['playlist_id'])
+        # if not playlist:
+        #     return None
+        playlist_id = show['playlist_id']
+        if playlist_id is None:
             return None
         random_play = show['random_play']
         if random_play:
-            track = self.get_random_song(playlist, play_time)
+            track = self.get_random_song(playlist_id, play_time)
             track.show_id = show_id
         else:
             radio_state = self.radio_state_manager.radio_state(radio_uuid)
