@@ -284,6 +284,9 @@ class RadioScheduler():
 
     def handle_new_track_start(self, event):
         # self.logger.info('track start %s' % datetime.now().time().isoformat())
+        # debug duration
+        begin = datetime.now()
+        #
         radio_uuid = event.get('radio_uuid', None)
         if not radio_uuid:
             self.logger.debug('handle_new_track_start ERROR: radio uuid is none in event')
@@ -315,11 +318,19 @@ class RadioScheduler():
             if response.status_code != 200:
                 self.logger.info('song played request failed for radio %s - song %d' % (radio_uuid, song_id))
 
+        # debug duration
+        elapsed = datetime.now() - begin
+        self.logger.debug('- handle_new_track_start %s' % elapsed)
+        #
+
     def handle_new_track_prepare(self, event):
         """
         new 'track prepare' event has been received
         we have a delay before a new track must be played in order to prepare this track
         """
+        # debug duration
+        begin = datetime.now()
+        #
         # self.logger.info('prepare track %s' % datetime.now().time().isoformat())
         radio_uuid = event.get('radio_uuid', None)
         if not radio_uuid:
@@ -327,6 +338,10 @@ class RadioScheduler():
         delay_before_play = event.get('delay_before_play', self.SONG_PREPARE_DURATION)
         crossfade_duration = event.get('crossfade_duration', self.CROSSFADE_DURATION)
         self.prepare_track(radio_uuid, delay_before_play, crossfade_duration)
+        # debug duration
+        elapsed = datetime.now() - begin
+        self.logger.debug('handle_new_track_prepare %s' % elapsed)
+        #
 
     def play_track(self, radio_uuid, track, delay, offset, crossfade_duration):
         """
