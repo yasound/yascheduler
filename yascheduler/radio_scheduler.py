@@ -156,7 +156,8 @@ class RadioScheduler():
             self.lock.acquire(True)
             events = self.radio_events.find({'date': {'$lte': self.current_step_time}})
             self.lock.release()
-            self.logger.info('loop... handle %d events' % events.count())
+            # MatDebug
+            # self.logger.info('loop... handle %d events' % events.count())
 
             for e in events:
                 # handle event
@@ -173,8 +174,8 @@ class RadioScheduler():
             next_event = None
             if next_events is not None and next_events.count() >= 1:
                 next_event = next_events[0]
-            else:
-                self.logger.debug('next events: %s' % next_events)
+            # else:
+            #     self.logger.debug('next events: %s' % next_events)
 
             # compute seconds to wait until next event
             seconds_to_wait = self.DEFAULT_SECONDS_TO_WAIT
@@ -183,8 +184,9 @@ class RadioScheduler():
                 diff_timedelta = next_date - datetime.now()
                 seconds_to_wait = diff_timedelta.days * 86400 + diff_timedelta.seconds + diff_timedelta.microseconds / 1000000.0
                 seconds_to_wait = max(seconds_to_wait, 0)
-                self.logger.debug('%s seconds until next event' % seconds_to_wait)
-                self.logger.debug('next event: %s' % next_event)
+                # MatDebug
+                # self.logger.debug('%s seconds until next event' % seconds_to_wait)
+                # self.logger.debug('next event: %s' % next_event)
 
             # waits until next event
             time.sleep(seconds_to_wait)
@@ -193,8 +195,10 @@ class RadioScheduler():
             self.last_step_time = self.current_step_time
 
     def handle_event(self, event):
+        # debug duration
+        begin = datetime.now()
+        #
         event_type = event.get('type', None)
-        self.logger.info('handle event ___%s___ (%s)' % (event_type, event['date']))
         if event_type == self.EVENT_TYPE_NEW_HOUR_PREPARE:
             self.handle_new_hour_prepare(event)
         elif event_type == self.EVENT_TYPE_NEW_TRACK_START:
@@ -211,6 +215,11 @@ class RadioScheduler():
             self.handle_report_songs(event)
         else:
             self.logger.info('event "%s" can not be handled: unknown type' % event)
+
+        # debug duration
+        elapsed = datetime.now() - begin
+        self.logger.info('"%s"   ___%s___ (%s)' % (elapsed, event_type, event['date']))
+        #
 
     def handle_check_programming(self, event):
         self.check_programming()
@@ -299,9 +308,6 @@ class RadioScheduler():
 
     def handle_new_track_start(self, event):
         # self.logger.info('track start %s' % datetime.now().time().isoformat())
-        # debug duration
-        begin = datetime.now()
-        #
         radio_uuid = event.get('radio_uuid', None)
         if not radio_uuid:
             self.logger.debug('handle_new_track_start ERROR: radio uuid is none in event')
@@ -309,7 +315,8 @@ class RadioScheduler():
         song_id = event.get('song_id', None)
         show_id = event.get('show_id', None)
 
-        self.logger.debug('track start (%s - %s)' % (radio_uuid, song_id))
+        # MatDebug
+        # self.logger.debug('track start (%s - %s)' % (radio_uuid, song_id))
 
         radio_state = self.radio_state_manager.radio_state(radio_uuid)
         radio_state.song_id = song_id
@@ -332,20 +339,11 @@ class RadioScheduler():
                     }
             self.songs_started.insert(doc, safe=True)
 
-
-        # debug duration
-        elapsed = datetime.now() - begin
-        self.logger.debug('- handle_new_track_start %s' % elapsed)
-        #
-
     def handle_new_track_prepare(self, event):
         """
         new 'track prepare' event has been received
         we have a delay before a new track must be played in order to prepare this track
         """
-        # debug duration
-        begin = datetime.now()
-        #
         # self.logger.info('prepare track %s' % datetime.now().time().isoformat())
         radio_uuid = event.get('radio_uuid', None)
         if not radio_uuid:
@@ -353,10 +351,6 @@ class RadioScheduler():
         delay_before_play = event.get('delay_before_play', self.SONG_PREPARE_DURATION)
         crossfade_duration = event.get('crossfade_duration', self.CROSSFADE_DURATION)
         self.prepare_track(radio_uuid, delay_before_play, crossfade_duration)
-        # debug duration
-        elapsed = datetime.now() - begin
-        self.logger.debug('handle_new_track_prepare %s' % elapsed)
-        #
 
     def play_track(self, radio_uuid, track, delay, offset, crossfade_duration):
         """
@@ -374,7 +368,8 @@ class RadioScheduler():
         next_delay_before_play = self.SONG_PREPARE_DURATION
         next_crossfade_duration = self.CROSSFADE_DURATION
         next_date = self.current_step_time + timedelta(seconds=(delay + track.duration - offset - next_crossfade_duration - next_delay_before_play))
-        self.logger.debug('store next prepare track (file DURATION: %s)' % track.duration)
+        # MatDebug
+        # self.logger.debug('store next prepare track (file DURATION: %s)' % track.duration)
         event = {
                 'type': self.EVENT_TYPE_NEW_TRACK_PREPARE,
                 'date': next_date,
@@ -395,10 +390,7 @@ class RadioScheduler():
         3 - send it to the streamer
         4 - create next 'track prepare' event
         """
-        # debug duration
-        begin = datetime.now()
-        #
-        self.logger.debug('\nprepare track (%s)' % radio_uuid)
+        # self.logger.debug('\nprepare track (%s)' % radio_uuid)
         # 1 get next track
         track = self.get_next_track(radio_uuid, delay_before_play)
         if track is None:
@@ -426,10 +418,6 @@ class RadioScheduler():
         # 4 store next "prepare track" event
         message = self.play_track(radio_uuid, track, delay_before_play, offset, crossfade_duration)
 
-        # debug duration
-        elapsed = datetime.now() - begin
-        self.logger.debug('%s prepare_track\n' % elapsed)
-        #
         return message  # for test purpose
 
     def get_current_show(self, radio_id, play_time):
