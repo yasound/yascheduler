@@ -54,6 +54,8 @@ class RadioScheduler():
 
         self.radio_events = self.mongo_scheduler.radios.events
         self.radio_events.ensure_index('radio_uuid')
+        self.radio_events.ensure_index('date')
+        self.radio_events.ensure_index('type')
 
         self.radio_state_manager = RadioStateManager()
 
