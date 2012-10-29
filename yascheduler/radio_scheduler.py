@@ -313,10 +313,18 @@ class RadioScheduler():
             # a song is played (not a jingle)
             # notify yaapp
 
+            # debug duration
+            b = datetime.now()
+            #
             url = settings.YASOUND_SERVER + '/api/v1/radio/%s/song/%d/played/' % (radio_uuid, song_id)
             response = requests.post(url, params={'key': settings.SCHEDULER_KEY})
             if response.status_code != 200:
                 self.logger.info('song played request failed for radio %s - song %d' % (radio_uuid, song_id))
+            # debug duration
+            elapsed = datetime.now() - b
+            self.logger.debug('-- song played request %s' % elapsed)
+            #
+
 
         # debug duration
         elapsed = datetime.now() - begin
