@@ -144,8 +144,10 @@ class RadioScheduler():
 
             # find events between last step and now
             self.lock.acquire(True)
-            events = self.radio_events.find({'date': {'$gt': self.last_step_time, '$lte': self.current_step_time}})
+            events = self.radio_events.find({'date': {'$lte': self.current_step_time}})
             self.lock.release()
+            self.logger.info('loop... handle %d events' % events.count())
+
             for e in events:
                 # handle event
                 self.handle_event(e)
@@ -156,11 +158,13 @@ class RadioScheduler():
 
             # find next event
             self.lock.acquire(True)
-            next_events = self.radio_events.find().sort([('date', ASCENDING)]).limit(1)
+            next_events = self.radio_events.find({'date': {'$gt': self.current_step_time}}).sort([('date', ASCENDING)]).limit(1)
             self.lock.release()
             next_event = None
-            if next_events is not None and next_events.count() == 1:
+            if next_events is not None and next_events.count() >= 1:
                 next_event = next_events[0]
+            else:
+                self.logger.debug('next events: %s' % next_events)
 
             # compute seconds to wait until next event
             seconds_to_wait = self.DEFAULT_SECONDS_TO_WAIT
@@ -168,6 +172,9 @@ class RadioScheduler():
                 next_date = next_event['date']
                 diff_timedelta = next_date - datetime.now()
                 seconds_to_wait = diff_timedelta.days * 86400 + diff_timedelta.seconds + diff_timedelta.microseconds / 1000000.0
+                seconds_to_wait = max(seconds_to_wait, 0)
+                self.logger.debug('%s seconds until next event' % seconds_to_wait)
+                self.logger.debug('next event: %s' % next_event)
 
             # waits until next event
             time.sleep(seconds_to_wait)
@@ -177,6 +184,7 @@ class RadioScheduler():
 
     def handle_event(self, event):
         event_type = event.get('type', None)
+        self.logger.info('handle event ___%s___ (%s)' % (event_type, event['date']))
         if event_type == self.EVENT_TYPE_NEW_HOUR_PREPARE:
             self.handle_new_hour_prepare(event)
         elif event_type == self.EVENT_TYPE_NEW_TRACK_START:
@@ -334,6 +342,7 @@ class RadioScheduler():
         next_delay_before_play = self.SONG_PREPARE_DURATION
         next_crossfade_duration = self.CROSSFADE_DURATION
         next_date = self.current_step_time + timedelta(seconds=(delay + track.duration - offset - next_crossfade_duration - next_delay_before_play))
+        self.logger.debug('store next prepare track (file DURATION: %s)' % track.duration)
         event = {
                 'type': self.EVENT_TYPE_NEW_TRACK_PREPARE,
                 'date': next_date,
