@@ -897,7 +897,6 @@ class RadioScheduler():
         # send request...
         url = settings.YASOUND_SERVER + '/api/v1/songs_started/'
         payload = {'key': settings.SCHEDULER_KEY, 'data': reports}
-        self.logger.debug('report_songs_started: %s' % reports)
         response = requests.post(url, data=json.dumps(payload))
         result = response.json
         if response.status_code != 200:
