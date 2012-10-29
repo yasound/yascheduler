@@ -585,7 +585,7 @@ class RadioScheduler():
         #
 
         # debug duration
-        b - datetime.now()
+        b = datetime.now()
         #
         if count == 0:  # try without time limit
             query = self.yaapp_alchemy_session.query(SongInstance).join(SongMetadata).filter(SongInstance.playlist_id == playlist_id, SongInstance.enabled == True, SongMetadata.yasound_song_id > 0).order_by(SongInstance.last_play_time)
