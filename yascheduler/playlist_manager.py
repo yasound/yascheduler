@@ -48,20 +48,17 @@ class PlaylistBuilder(Thread):
 
     def run(self):
         while self.quit == False:
-            self.logger.debug('------------------')
+            self.logger.debug('PlaylistBuilder.....')
 
-            self.logger.debug('--- 1 --- PlaylistBuilder: check playlists')
             # 1 - create entries for new playlists
             # and remove old ones
             self.check_playlists()
 
-            self.logger.debug('--- 2 --- PlaylistBuilder: process songs for new playlists')
             # 2 - compute songs for newly created playlists
             docs = self.playlist_collection.find({'update_date': None})
             for doc in docs:
                 self.update_songs(doc)
 
-            self.logger.debug('--- 3 --- PlaylistBuilder: process songs for empty playlists')
             # 3 - compute songs for playlists whose song queue contains less than x songs
             docs = self.playlist_collection.find({'song_count': {'$lt': self.MIN_SONG_COUNT}})
             for doc in docs:
