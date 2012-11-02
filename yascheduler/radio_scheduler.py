@@ -1,16 +1,12 @@
 import settings
 from logger import Logger
-# from settings import yaapp_session_maker, yasound_session_maker
-from models.yaapp_alchemy_models import Radio, Playlist, SongInstance, SongMetadata
+from models.yaapp_alchemy_models import Radio, Playlist, SongInstance
 from models.yasound_alchemy_models import YasoundSong
 from models.account_alchemy_models import User
 from datetime import datetime, timedelta, date
 import time
 from pymongo import ASCENDING, DESCENDING
-from sqlalchemy import or_
-import random
-from threading import Thread, Lock
-import json
+from threading import Lock
 import requests
 from streamer_checker import StreamerChecker
 from redis_listener import RedisListener
@@ -69,8 +65,6 @@ class RadioScheduler():
 
         self.songs_started = self.mongo_scheduler.songs_started
 
-        # self.yaapp_alchemy_session = yaapp_session_maker()
-        # self.yasound_alchemy_session = yasound_session_maker()
         session_factory = sessionmaker(bind=settings.yaapp_alchemy_engine)
         self.yaapp_alchemy_session = scoped_session(session_factory)
 
@@ -511,173 +505,6 @@ class RadioScheduler():
 
         return track
 
-    # def get_random_song(self, playlist_id, play_time):
-    #     """
-    #     returns Track object
-    #     """
-    #     # debug duration
-    #     begin = datetime.now()
-    #     #
-
-    #     # debug duration
-    #     b = datetime.now()
-    #     #
-    #     time_limit = play_time - timedelta(hours=3)
-    #     # SongInstance playlist.id == playlist_id
-    #     # SongInstance enabled == True
-    #     # SongInstance last_play_time is None or < time_limit
-    #     # SongMetadata yasound_song_id > 0
-    #     # order by last_play_time
-    #     query = self.yaapp_alchemy_session.query(SongInstance).join(SongMetadata).filter(SongInstance.playlist_id == playlist_id, SongInstance.enabled == True, or_(SongInstance.last_play_time < time_limit, SongInstance.last_play_time == None), SongMetadata.yasound_song_id > 0).order_by(SongInstance.last_play_time)
-    #     songs_data = list(query.values(SongInstance.frequency, SongInstance.id))
-    #     count = len(songs_data)
-    #     # debug duration
-    #     elapsed = datetime.now() - b
-    #     self.logger.debug('----------- %s songs data' % elapsed)
-    #     #
-
-    #     # debug duration
-    #     b = datetime.now()
-    #     #
-    #     if count == 0:  # try without time limit
-    #         query = self.yaapp_alchemy_session.query(SongInstance).join(SongMetadata).filter(SongInstance.playlist_id == playlist_id, SongInstance.enabled == True, SongMetadata.yasound_song_id > 0).order_by(SongInstance.last_play_time)
-    #         songs_data = list(query.values(SongInstance.frequency, SongInstance.id))
-    #         count = len(songs_data)
-
-    #     if count == 0:
-    #         self.logger.info('no song available for playlist %d' % playlist_id)
-    #         return None
-    #     # debug duration
-    #     elapsed = datetime.now() - b
-    #     self.logger.debug('----------- %s songs data (2)' % elapsed)
-    #     #
-
-    #     # debug duration
-    #     b = datetime.now()
-    #     #
-    #     # use frequency * frequency to have high frequencies very different from low frequencies
-    #     # multiply frequency weight by a date factor to have higher probabilities for songs not played since a long time (date factor = 1 for older song, 0.15 for more recent one)
-    #     first_idx_factor = 1
-    #     last_idx_factor = 0.15
-    #     if (count - 1) == 0:
-    #         date_factor_func = lambda x: 1
-    #     else:
-    #         date_factor_func = lambda x: ((last_idx_factor - first_idx_factor) / (count - 1)) * x + first_idx_factor
-    #     weights = [data[0] * data[0] * date_factor_func(idx) for idx, data in enumerate(songs_data)]
-    #     r = random.random()
-    #     sum_weight = sum(weights)
-    #     rnd = r * sum_weight
-    #     index = -1
-    #     for i, w in enumerate(weights):
-    #         rnd -= w
-    #         if rnd <= 0:
-    #             index = i
-    #             break
-    #     if index == -1:
-    #         if count > 0:
-    #             index = 0
-    #         else:
-    #             return None
-    #     song_id = songs_data[index][1]
-    #     # debug duration
-    #     elapsed = datetime.now() - b
-    #     self.logger.debug('----------- %s chose song' % elapsed)
-    #     #
-
-    #     # debug duration
-    #     b = datetime.now()
-    #     #
-    #     metadata_id = list(self.yaapp_alchemy_session.query(SongInstance).filter(SongInstance.id == song_id).values(SongInstance.metadata_id))[0][0]
-    #     # debug duration
-    #     elapsed = datetime.now() - b
-    #     self.logger.debug('----------- %s metadata id' % elapsed)
-    #     #
-
-    #     # debug duration
-    #     b = datetime.now()
-    #     #
-    #     y_id = list(self.yaapp_alchemy_session.query(SongMetadata).filter(SongMetadata.id == metadata_id).values(SongMetadata.yasound_song_id))[0][0]
-    #     # debug duration
-    #     elapsed = datetime.now() - b
-    #     self.logger.debug('----------- %s yasound song id' % elapsed)
-    #     #
-
-    #     # debug duration
-    #     b = datetime.now()
-    #     #
-    #     yasound_song_data = list(self.yasound_alchemy_session.query(YasoundSong).filter(YasoundSong.id == y_id).values(YasoundSong.filename, YasoundSong.duration))[0]
-    #     filename = yasound_song_data[0]
-    #     duration = yasound_song_data[1]
-    #     track = Track(filename, duration, song_id=song_id)
-    #     # debug duration
-    #     elapsed = datetime.now() - b
-    #     self.logger.debug('----------- %s yasound song data' % elapsed)
-    #     #
-
-    #     # debug duration
-    #     elapsed = datetime.now() - begin
-    #     self.logger.debug('---------- %s get_random_song' % elapsed)
-    #     #
-    #     return track
-
-    # def get_song_default(self, radio_id, play_time):  # use radio id instead of uuid to filter playlists
-    #     # debug duration
-    #     begin = datetime.now()
-    #     #
-
-    #     # debug duration
-    #     b = datetime.now()
-    #     #
-    #     playlists_data = list(self.yaapp_alchemy_session.query(Playlist).filter(Playlist.radio_id == radio_id, Playlist.name == 'default').values(Playlist.id))
-    #     if len(playlists_data) == 0:
-    #         return None
-    #     playlist_id = playlists_data[0][0]
-    #     # debug duration
-    #     elapsed = datetime.now() - b
-    #     self.logger.debug('--------- %s default playlist id' % elapsed)
-    #     #
-
-    #     # debug duration
-    #     b = datetime.now()
-    #     #
-    #     track = self.get_random_song(playlist_id, play_time)
-    #     # debug duration
-    #     elapsed = datetime.now() - b
-    #     self.logger.debug('--------- %s get random song' % elapsed)
-    #     #
-
-    #     # debug duration
-    #     elapsed = datetime.now() - begin
-    #     self.logger.debug('-------- %s get_song_default' % elapsed)
-    #     #
-    #     return track
-
-    # def get_song_in_show(self, radio_uuid, show_id, play_time):
-    #     show = self.shows.find_one({'_id': show_id})
-    #     if show is None:
-    #         return None
-
-    #     playlist_id = show['playlist_id']
-    #     if playlist_id is None:
-    #         return None
-    #     random_play = show['random_play']
-    #     if random_play:
-    #         track = self.get_random_song(playlist_id, play_time)
-    #         track.show_id = show_id
-    #     else:
-    #         radio_state = self.radio_state_manager.radio_state(radio_uuid)
-    #         previous_order = 0
-    #         if radio_state.show_id is not None:
-    #             # song stored in radio_state is a song from the show, so it has a valid order value
-    #             previous_song = self.yaapp_alchemy_session.query(SongInstance).get(radio_state.song_id)
-    #             previous_order = previous_song.order
-    #         song = self.yaapp_alchemy_session.query(SongInstance).filter(SongInstance.playlist_id == playlist.id, SongInstance.order > previous_order).first()
-    #         if song is None:
-    #             return None
-    #         yasound_song = self.yasound_alchemy_session.query(YasoundSong).get(song.song_metadata.yasound_song_id)
-    #         track = Track(yasound_song.filename, yasound_song.duration, song_id=song.id, show_id=show_id)
-    #     return track
-
     def get_radio_jingle_track(self, radio_uuid):
         # self.logger.info('get radio jingle track')
         return None  # TODO
@@ -957,7 +784,7 @@ class RadioScheduler():
     def check_existing_radios(self):
         self.logger.debug('*** check existing radios: add new radios and remove deleted radios')
         scheduler_radio_uuids = set(self.radio_state_manager.radio_states.find().distinct('radio_uuid'))
-        radios = self.yaapp_alchemy_session.query(Radio).filter(Radio.ready == True, Radio.origin == 0) # origin == 0 is for radios created in yasound
+        radios = self.yaapp_alchemy_session.query(Radio).filter(Radio.ready == True, Radio.origin == 0)  # origin == 0 is for radios created in yasound
         db_radio_uuids = set([r.uuid for r in radios])
 
         # uuids to remove from radio states (radio not ready anymore)

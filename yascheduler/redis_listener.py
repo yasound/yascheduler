@@ -33,9 +33,6 @@ class RedisListener(Thread):
         session_factory = sessionmaker(bind=settings.yasound_alchemy_engine)
         self.yasound_alchemy_session = scoped_session(session_factory)
 
-        # self.yaapp_alchemy_session = yaapp_session_maker()
-        # self.yasound_alchemy_session = yasound_session_maker()
-
     def run(self):
         self.logger.debug('Redis listener run...')
         try:
