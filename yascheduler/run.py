@@ -28,5 +28,9 @@ if __name__ == "__main__":
     Logger().log.info('enable programming check = %s' % (check_programming))
     Logger().log.info('flush = %s' % (flush))
 
-    scheduler = RadioScheduler(enable_ping_streamers=enable_ping, flush=flush, enable_programming_check=check_programming)
-    scheduler.run()
+    scheduler = RadioScheduler(enable_ping_streamers=enable_ping, enable_programming_check=check_programming)
+
+    if flush:
+        scheduler.flush()
+    else:
+        scheduler.run()

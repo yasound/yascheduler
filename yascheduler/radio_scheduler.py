@@ -42,7 +42,7 @@ class RadioScheduler():
     CHECK_PROGRAMMING_PERIOD = 30
     REPORT_SONGS_STARTED_PERIOD = 2
 
-    def __init__(self, enable_ping_streamers=True, flush=False, enable_programming_check=False):
+    def __init__(self, enable_ping_streamers=True, enable_programming_check=False):
         self.current_step_time = datetime.now()
         self.last_step_time = self.current_step_time
 
@@ -50,7 +50,6 @@ class RadioScheduler():
         self.publisher = RedisPublisher('yastream')
 
         self.enable_ping_streamers = enable_ping_streamers
-        self.flush_before_run = flush
         self.enable_programming_check = enable_programming_check
 
         self.mongo_scheduler = settings.MONGO_DB.scheduler
@@ -109,11 +108,6 @@ class RadioScheduler():
         self.redis_listener.start()
 
         self.playlist_manager.start_thread()
-
-        # flush if needed
-        if self.flush_before_run:
-            self.flush()
-            return
 
         # starts streamer checker thread
         if self.enable_ping_streamers:
