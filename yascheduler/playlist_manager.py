@@ -23,9 +23,9 @@ class PlaylistBuilder(Thread):
         self.logger = Logger().log
 
         self.playlist_collection = settings.MONGO_DB.scheduler.playlists
-        self.playlist_collection.ensure_index('playlist.id', unique=True)
+        self.playlist_collection.ensure_index('playlist_id')
         self.playlist_collection.ensure_index('radio_uuid')
-        self.playlist_collection.ensure_index('playlist.is_default')
+        self.playlist_collection.ensure_index('playlist_is_default')
         self.playlist_collection.ensure_index('update_date')
         self.playlist_collection.ensure_index('song_count')
 
@@ -44,18 +44,24 @@ class PlaylistBuilder(Thread):
 
     def clear_data(self):
         self.playlist_collection.remove()
+        self.playlist_collection.drop()
 
     def run(self):
         while self.quit == False:
+            self.logger.debug('------------------')
+
+            self.logger.debug('--- 1 --- PlaylistBuilder: check playlists')
             # 1 - create entries for new playlists
             # and remove old ones
             self.check_playlists()
 
+            self.logger.debug('--- 2 --- PlaylistBuilder: process songs for new playlists')
             # 2 - compute songs for newly created playlists
             docs = self.playlist_collection.find({'update_date': None})
             for doc in docs:
                 self.update_songs(doc)
 
+            self.logger.debug('--- 3 --- PlaylistBuilder: process songs for empty playlists')
             # 3 - compute songs for playlists whose song queue contains less than x songs
             docs = self.playlist_collection.find({'song_count': {'$lt': self.MIN_SONG_COUNT}})
             for doc in docs:
@@ -68,8 +74,8 @@ class PlaylistBuilder(Thread):
         return self.playlist_collection.count()
 
     def update_songs(self, playlist_doc):
-        playlist_id = playlist_doc['playlist']['playlist_id']
-        show_id = playlist_doc['playlist']['show_id']
+        playlist_id = playlist_doc['playlist_id']
+        show_id = playlist_doc['show_id']
         songs = []
         if show_id == None:
             songs = self.build_random_songs(playlist_id)
@@ -114,8 +120,6 @@ class PlaylistBuilder(Thread):
 
     def build_random_songs(self, playlist_id):
         time_limit = datetime.now() - timedelta(hours=3)
-        self.logger.debug('playlist_id %s' % playlist_id)
-        self.logger.debug('len(playlist_id) %s' % len(playlist_id))
         # SongInstance playlist.id == playlist_id
         # SongInstance enabled == True
         # SongInstance last_play_time is None or < time_limit
@@ -171,7 +175,7 @@ class PlaylistBuilder(Thread):
             song = {
                     'song_id': song_data.id,
                     'filename': yasound_song.filename,
-                    'duraiton': yasound_song.duration
+                    'duration': yasound_song.duration
             }
             songs.append(song)
         return songs
@@ -182,7 +186,8 @@ class PlaylistBuilder(Thread):
         add the new ones,
         remove those which no longer exist
         """
-        default_playlists = set(self.yaapp_alchemy_session.query(Playlist).join(Radio).filter(Radio.ready == True, Playlist.name == 'default').values(Playlist.id))
+        ids = self.yaapp_alchemy_session.query(Playlist).join(Radio).filter(Radio.ready == True, Playlist.name == 'default').values(Playlist.id)
+        default_playlists = set([x[0] for x in ids])
 
         show_playlists = set()
         playlist_to_show = {}
@@ -194,13 +199,13 @@ class PlaylistBuilder(Thread):
             playlist_to_show[playlist_id] = show_id
 
         in_db = default_playlists.union(show_playlists)
-        in_collection = set(self.playlist_collection.find().distinct('playlist.id'))
+        in_collection = set(self.playlist_collection.find().distinct('playlist_id'))
 
         remove_from_collection = in_collection.difference(in_db)
         add_to_collection = in_db.difference(in_collection)
 
         # remove playlists which should not be in collection anymore
-        self.playlist_collection.remove({'playlist.id': {'$in': list(remove_from_collection)}})
+        self.playlist_collection.remove({'playlist_id': {'$in': list(remove_from_collection)}})
 
         # add new playlists
         for p_id in add_to_collection:
@@ -211,18 +216,14 @@ class PlaylistBuilder(Thread):
             playlist = self.yaapp_alchemy_session.query(Playlist).get(p_id)
             radio_uuid = playlist.radio.uuid
             doc = {
-                    'playlist': {
-                                    'playlist_id': p_id,
-                                    'is_default': is_default,
-                                    'show_id': show_id,
-                    },
+                    'playlist_id': p_id,
+                    'playlist_is_default': is_default,
+                    'show_id': show_id,
                     'radio_uuid': radio_uuid,
                     'update_date': None,
                     'songs': [],
                     'song_count': 0
             }
-            self.logger.debug('check_playlists, new doc: %s' % doc)
-            self.logger.debug('p_id: %s' % p_id)
             self.playlist_collection.insert(doc, safe=True)
 
 
@@ -243,7 +244,7 @@ class PlaylistManager():
         self.builder.clear_data()
 
     def track_in_playlist(self, playlist_id):
-        playlist_doc = self.builder.playlist_collection.find_one({'playlist.id': playlist_id}, {'songs': {'$slice': 1}})
+        playlist_doc = self.builder.playlist_collection.find_one({'playlist_id': playlist_id}, {'songs': {'$slice': 1}})
 
         if playlist_doc is None:
             self.logger.info('Playlist Manager - track_in_playlist: no prepared playlist %s' % playlist_id)
@@ -256,7 +257,7 @@ class PlaylistManager():
         else:
             # get first prepared song, remove it and decrement song_count
             song = playlist_doc['songs'][0]
-            self.builder.playlist_collection.update({'playlist.id': playlist_id}, {'songs': {'$pop': -1}, 'song_count': {'$inc': -1}})
+            self.builder.playlist_collection.update({'playlist_id': playlist_id}, {'$pop': {'songs': -1}, '$inc': {'song_count': -1}})
 
         if song == None:
             return None
@@ -264,13 +265,13 @@ class PlaylistManager():
         filename = song['filename']
         duration = song['duration']
         song_id = song['song_id']
-        show_id = playlist_doc['playlist'].get('show_id', None)
+        show_id = playlist_doc.get('show_id', None)
         track = Track(filename, duration, song_id, show_id)
         return track
 
     def track_in_radio(self, radio_uuid):
         # look for 'default' playlist
-        playlist_doc = self.builder.playlist_collection.find_one({'radio.uuid': radio_uuid, 'playlist.is_default': True}, {'songs': {'$slice': 1}})
+        playlist_doc = self.builder.playlist_collection.find_one({'radio_uuid': radio_uuid, 'playlist_is_default': True}, {'songs': {'$slice': 1}})
 
         song = None
         if playlist_doc is None:
@@ -280,7 +281,7 @@ class PlaylistManager():
 
         elif playlist_doc['songs'] is None or playlist_doc['song_count'] == 0 or len(playlist_doc['songs']) == 0:
             self.logger.info('Playlist Manager - track_in_radio: no ready song for radio %s' % radio_uuid)
-            playlist_id = playlist_doc['playlist']['playlist_id']
+            playlist_id = playlist_doc['playlist_id']
             if playlist_id == None:
                 playlist_id = self.builder.yaapp_alchemy_session.query(Playlist).join(Radio).filter(Radio.uuid == radio_uuid, Playlist.name == 'default').first().id
             song = self._random_song(playlist_id)
@@ -288,7 +289,7 @@ class PlaylistManager():
         else:
             # get first prepared song, remove it and decrement song_count
             song = playlist_doc['songs'][0]
-            self.builder.playlist_collection.update({'playlist.id': playlist_id}, {'songs': {'$pop': -1}, 'song_count': {'$inc': -1}})
+            self.builder.playlist_collection.update({'playlist_id': playlist_doc['playlist_id']}, {'$pop': {'songs': -1}, '$inc': {'song_count': -1}})
 
         if song == None:
             return None
