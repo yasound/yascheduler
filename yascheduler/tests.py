@@ -7,6 +7,7 @@ from models.account_alchemy_models import User, UserProfile, ApiKey
 from radio_scheduler import RadioScheduler
 import time
 from radio_state import RadioStateManager, RadioState
+from playlist_manager import PlaylistManager, PlaylistBuilder
 
 def clean_db(yaapp_session, yasound_session):
     yaapp_session.query(Radio).delete()
@@ -242,4 +243,45 @@ class TestExistingRadiosCheck(TestCase):
         self.scheduler.check_existing_radios()
         self.assertEqual(self.scheduler.radio_state_manager.radio_states.find().count(), 2)
 
+
+class TestPlaylistManager(TestCase):
+    def setUp(self):
+        self.manager = PlaylistManager(start_builder_thread=False)
+        self.manager.builder.clear_data()
+
+        self.yaapp_session = self.manager.builder.yaapp_alchemy_session
+        self.yasound_session = self.manager.builder.yasound_alchemy_session
+        clean_db(self.yaapp_session, self.yasound_session)
+
+    def test_check_playlists(self):
+        radio_uuid1 = 'uuid1'
+        r1 = Radio('mat radio 1', radio_uuid1)
+        r1.ready = True
+        self.yaapp_session.add(r1)
+
+        radio_uuid2 = 'uuid2'
+        r2 = Radio('mat radio 2', radio_uuid2)
+        r2.ready = True
+        self.yaapp_session.add(r2)
+
+        radio_uuid3 = 'uuid3'
+        r3 = Radio('mat radio 3', radio_uuid3)
+        r3.ready = False
+        self.yaapp_session.add(r3)
+
+        p1_default = Playlist('default', r1)
+        self.yaapp_session.add(p1_default)
+
+        p2_default = Playlist('default', r2)
+        self.yaapp_session.add(p2_default)
+
+        p3_default = Playlist('default', r3)
+        self.yaapp_session.add(p3_default)
+
+        self.assertEqual(self.yaapp_session.query(Radio).count(), 3)
+        self.assertEqual(self.yaapp_session.query(Playlist).count(), 3)
+
+        self.assertEqual(self.manager.builder.playlist_count(), 0)
+        self.manager.builder.check_playlists()
+        self.assertEqual(self.manager.builder.playlist_count(), 3)
 
