@@ -189,9 +189,9 @@ class RadioScheduler():
             self.last_step_time = self.current_step_time
 
     def handle_event(self, event):
-        # debug duration
-        begin = datetime.now()
-        #
+        # # debug duration
+        # begin = datetime.now()
+        # #
         event_type = event.get('type', None)
         if event_type == self.EVENT_TYPE_NEW_HOUR_PREPARE:
             self.handle_new_hour_prepare(event)
@@ -208,10 +208,10 @@ class RadioScheduler():
         else:
             self.logger.info('event "%s" can not be handled: unknown type' % event)
 
-        # debug duration
-        elapsed = datetime.now() - begin
-        self.logger.info('"%s"   ___%s___ (%s)' % (elapsed, event_type, event['date']))
-        #
+        # # debug duration
+        # elapsed = datetime.now() - begin
+        # self.logger.info('"%s"   ___%s___ (%s)' % (elapsed, event_type, event['date']))
+        # #
 
     def handle_check_programming(self, event):
         self.check_programming()
@@ -328,9 +328,9 @@ class RadioScheduler():
         we have a delay before a new track must be played in order to prepare this track
         """
         self.logger.debug('\n*********************')
-        # debug duration
-        begin = datetime.now()
-        #
+        # # debug duration
+        # begin = datetime.now()
+        # #
         # self.logger.info('prepare track %s' % datetime.now().time().isoformat())
         radio_uuid = event.get('radio_uuid', None)
         if not radio_uuid:
@@ -339,10 +339,10 @@ class RadioScheduler():
         crossfade_duration = event.get('crossfade_duration', self.CROSSFADE_DURATION)
         self.prepare_track(radio_uuid, delay_before_play, crossfade_duration)
 
-        # debug duration
-        elapsed = datetime.now() - begin
-        self.logger.debug('-- %s handle_new_track_prepare' % elapsed)
-        #
+        # # debug duration
+        # elapsed = datetime.now() - begin
+        # self.logger.debug('-- %s handle_new_track_prepare' % elapsed)
+        # #
 
     def play_track(self, radio_uuid, track, delay, offset, crossfade_duration):
         """
@@ -381,24 +381,24 @@ class RadioScheduler():
         3 - send it to the streamer
         4 - create next 'track prepare' event
         """
-        # debug duration
-        begin = datetime.now()
-        #
+        # # debug duration
+        # begin = datetime.now()
+        # #
         # self.logger.debug('\nprepare track (%s)' % radio_uuid)
 
-        # debug duration
-        b = datetime.now()
-        #
+        # # debug duration
+        # b = datetime.now()
+        # #
         # 1 get next track
         track = self.get_next_track(radio_uuid, delay_before_play)
-        # debug duration
-        elapsed = datetime.now() - b
-        self.logger.debug('----- %s get next track' % elapsed)
-        #
+        # # debug duration
+        # elapsed = datetime.now() - b
+        # self.logger.debug('----- %s get next track' % elapsed)
+        # #
 
-        # debug duration
-        b = datetime.now()
-        #
+        # # debug duration
+        # b = datetime.now()
+        # #
         if track is None:
             self.logger.debug('prepare_track ERROR: cannot get next track')
             return None
@@ -419,28 +419,28 @@ class RadioScheduler():
         self.lock.acquire(True)
         self.radio_events.insert(event, safe=True)
         self.lock.release()
-        # debug duration
-        elapsed = datetime.now() - b
-        self.logger.debug('----- %s store track start event' % elapsed)
-        #
+        # # debug duration
+        # elapsed = datetime.now() - b
+        # self.logger.debug('----- %s store track start event' % elapsed)
+        # #
 
-        # debug duration
-        b = datetime.now()
-        #
+        # # debug duration
+        # b = datetime.now()
+        # #
 
         # 3 send message to the streamer
         # 4 store next "prepare track" event
         message = self.play_track(radio_uuid, track, delay_before_play, offset, crossfade_duration)
 
-        # debug duration
-        elapsed = datetime.now() - b
-        self.logger.debug('----- %s play track' % elapsed)
-        #
+        # # debug duration
+        # elapsed = datetime.now() - b
+        # self.logger.debug('----- %s play track' % elapsed)
+        # #
 
-        # debug duration
-        elapsed = datetime.now() - begin
-        self.logger.debug('---- %s prepare_track' % elapsed)
-        #
+        # # debug duration
+        # elapsed = datetime.now() - begin
+        # self.logger.debug('---- %s prepare_track' % elapsed)
+        # #
         return message  # for test purpose
 
     def get_current_show(self, radio_uuid, play_time):
