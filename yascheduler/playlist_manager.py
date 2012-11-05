@@ -273,14 +273,20 @@ class PlaylistManager():
         song = None
         if playlist_doc is None:
             self.logger.info('Playlist Manager - track_in_radio: no prepared playlist for radio %s' % radio_uuid)
-            playlist_id = self.builder.yaapp_alchemy_session.query(Playlist).join(Radio).filter(Radio.uuid == radio_uuid, Playlist.name == 'default').first().id
-            song = self._random_song(playlist_id)
+            playlist = self.builder.yaapp_alchemy_session.query(Playlist).join(Radio).filter(Radio.uuid == radio_uuid, Playlist.name == 'default').first()
+            if playlist is None:
+                return None
+            song = self._random_song(playlist.id)
 
         elif playlist_doc['songs'] is None or playlist_doc['song_count'] == 0 or len(playlist_doc['songs']) == 0:
             self.logger.info('Playlist Manager - track_in_radio: no ready song for radio %s' % radio_uuid)
             playlist_id = playlist_doc['playlist_id']
             if playlist_id == None:
-                playlist_id = self.builder.yaapp_alchemy_session.query(Playlist).join(Radio).filter(Radio.uuid == radio_uuid, Playlist.name == 'default').first().id
+                playlist = self.builder.yaapp_alchemy_session.query(Playlist).join(Radio).filter(Radio.uuid == radio_uuid, Playlist.name == 'default').first()
+                if playlist is None:
+                    return None
+                else:
+                    playlist_id = playlist.id
             song = self._random_song(playlist_id)
 
         else:

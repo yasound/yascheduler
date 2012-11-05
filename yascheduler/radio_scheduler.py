@@ -56,6 +56,8 @@ class RadioScheduler():
 
         self.radio_state_manager = RadioStateManager()
 
+        self.redis_listener = RedisListener(self)
+
         self.streamers = self.mongo_scheduler.streamers
         self.streamers.ensure_index('name', unique=True)
 
@@ -99,7 +101,6 @@ class RadioScheduler():
         self.last_step_time = datetime.now()
 
         # starts thread to listen to redis events
-        self.redis_listener = RedisListener(self)
         self.redis_listener.start()
 
         self.playlist_manager.start_thread()

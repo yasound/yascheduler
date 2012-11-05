@@ -1,5 +1,5 @@
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, BigInteger
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, BigInteger, SmallInteger
 from sqlalchemy import ForeignKey
 from sqlalchemy.orm import relationship, backref
 from datetime import datetime
@@ -44,6 +44,24 @@ class UserProfile(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String(60))
     permissions = Column(BigInteger)
+    account_type = Column(String)
+    twitter_token = Column(String)
+    twitter_token_secret = Column(String)
+    twitter_username = Column(String)
+    twitter_email = Column(String)
+    facebook_token = Column(String)
+    facebook_username = Column(String)
+    facebook_email = Column(String)
+    facebook_expiration_date = Column(String)
+    yasound_email = Column(String)
+    privacy = Column(SmallInteger)
+    gender = Column(String)
+    city = Column(String)
+    language = Column(String)
+    email_confirmed = Column(Boolean)
+    notifications_preferences = Column(Integer)
+    friends_count = Column(Integer)
+    followers_count = Column(Integer)
 
     user_id = Column(Integer, ForeignKey('auth_user.id'))
     user = relationship('User', uselist=False, backref=backref('userprofile', uselist=False))
@@ -52,6 +70,24 @@ class UserProfile(Base):
         self.name = name
         self.permissions = 0
         self.user_id = user.id
+        self.account_type = ''
+        self.twitter_token = ''
+        self.twitter_token_secret = ''
+        self.twitter_username = ''
+        self.twitter_email = ''
+        self.facebook_token = ''
+        self.facebook_username = ''
+        self.facebook_email = ''
+        self.facebook_expiration_date = ''
+        self.yasound_email = ''
+        self.privacy = 0
+        self.gender = ''
+        self.city = ''
+        self.language = ''
+        self.email_confirmed = False
+        self.notifications_preferences = 0
+        self.friends_count = 0
+        self.followers_count = 0
 
     def __str__(self):
         return '(%d) %s' % (self.id, self.name)

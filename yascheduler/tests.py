@@ -19,7 +19,10 @@ def clean_db(yaapp_session, yasound_session):
     yaapp_session.query(UserProfile).delete()
     yaapp_session.query(ApiKey).delete()
 
+    yaapp_session.commit()
+
     yasound_session.query(YasoundSong).delete()
+    yasound_session.commit()
 
 class Test(TestCase):
 
@@ -29,7 +32,7 @@ class Test(TestCase):
         self.yasound_session = self.scheduler.yasound_alchemy_session
         clean_db(self.yaapp_session, self.yasound_session)
 
-        self.scheduler.clear_mongo()
+        self.scheduler.flush()
 
     def test_sqlalchemy_models(self):
         count = self.yasound_session.query(YasoundSong).count()
@@ -51,6 +54,8 @@ class Test(TestCase):
         api_key = ApiKey(u, key)
         self.yaapp_session.add(api_key)
 
+        self.yaapp_session.commit()
+
         u = self.yaapp_session.query(User).first()
         self.assertEqual(u.api_key.key, key)
 
@@ -58,7 +63,6 @@ class Test(TestCase):
         self.assertEqual(api_key.user_id, u.id)
 
         self.yaapp_session.commit()
-        self.yasound_session.commit()
 
     def test_authentication(self):
         u = User('mat')
@@ -73,6 +77,8 @@ class Test(TestCase):
         key = 'keykeykey'
         api_key = ApiKey(u, key)
         self.yaapp_session.add(api_key)
+
+        self.yaapp_session.commit()
 
         username = u.username
         api_key = u.api_key.key
@@ -102,6 +108,8 @@ class Test(TestCase):
         key = 'keykeykey'
         api_key = ApiKey(u, key)
         self.yaapp_session.add(api_key)
+
+        self.yaapp_session.commit()
 
         listener_count = self.scheduler.listeners.count()
         self.assertEqual(listener_count, 0)
@@ -210,20 +218,37 @@ class TestExistingRadiosCheck(TestCase):
         self.yaapp_session = self.scheduler.yaapp_alchemy_session
         self.yasound_session = self.scheduler.yasound_alchemy_session
         clean_db(self.yaapp_session, self.yasound_session)
-        self.scheduler.clear_mongo()
+        self.scheduler.flush()
 
     def test(self):
-        r1 = Radio('mat radio 1', 'uuid1')
+        radio_uuid1 = 'uuid1'
+        r1 = Radio('mat radio 1', radio_uuid1)
         r1.ready = True
         self.yaapp_session.add(r1)
+        r1 = self.yaapp_session.query(Radio).filter(Radio.uuid == radio_uuid1).first()
 
-        r2 = Radio('mat radio 2', 'uuid2')
+        radio_uuid2 = 'uuid2'
+        r2 = Radio('mat radio 2', radio_uuid2)
         r2.ready = True
         self.yaapp_session.add(r2)
+        r2 = self.yaapp_session.query(Radio).filter(Radio.uuid == radio_uuid2).first()
 
-        r3 = Radio('mat radio 3', 'uuid3')
+        radio_uuid3 = 'uuid3'
+        r3 = Radio('mat radio 3', radio_uuid3)
         r3.ready = False
         self.yaapp_session.add(r3)
+        r3 = self.yaapp_session.query(Radio).filter(Radio.uuid == radio_uuid3).first()
+
+        p1_default = Playlist('default', r1)
+        self.yaapp_session.add(p1_default)
+
+        p2_default = Playlist('default', r2)
+        self.yaapp_session.add(p2_default)
+
+        p3_default = Playlist('default', r3)
+        self.yaapp_session.add(p3_default)
+
+        self.yaapp_session.commit()
 
         self.assertEqual(self.scheduler.radio_state_manager.radio_states.find().count(), 0)
         self.scheduler.check_existing_radios()
@@ -243,6 +268,8 @@ class TestExistingRadiosCheck(TestCase):
         self.scheduler.check_existing_radios()
         self.assertEqual(self.scheduler.radio_state_manager.radio_states.find().count(), 2)
 
+        self.yaapp_session.commit()
+
 
 class TestPlaylistManager(TestCase):
     def setUp(self):
@@ -258,16 +285,19 @@ class TestPlaylistManager(TestCase):
         r1 = Radio('mat radio 1', radio_uuid1)
         r1.ready = True
         self.yaapp_session.add(r1)
+        r1 = self.yaapp_session.query(Radio).filter(Radio.uuid == radio_uuid1).first()
 
         radio_uuid2 = 'uuid2'
         r2 = Radio('mat radio 2', radio_uuid2)
         r2.ready = True
         self.yaapp_session.add(r2)
+        r2 = self.yaapp_session.query(Radio).filter(Radio.uuid == radio_uuid2).first()
 
         radio_uuid3 = 'uuid3'
         r3 = Radio('mat radio 3', radio_uuid3)
         r3.ready = False
         self.yaapp_session.add(r3)
+        r3 = self.yaapp_session.query(Radio).filter(Radio.uuid == radio_uuid3).first()
 
         p1_default = Playlist('default', r1)
         self.yaapp_session.add(p1_default)
@@ -283,5 +313,63 @@ class TestPlaylistManager(TestCase):
 
         self.assertEqual(self.manager.builder.playlist_count(), 0)
         self.manager.builder.check_playlists()
-        self.assertEqual(self.manager.builder.playlist_count(), 3)
+        self.assertEqual(self.manager.builder.playlist_count(), 2)  # 3 radios, but only 2 ready ones
 
+        self.yaapp_session.commit()
+
+    def test_songs(self):
+        radio_uuid = 'uuid'
+        r = Radio('my radio', radio_uuid)
+        r.ready = True
+        self.yaapp_session.add(r)
+        r = self.yaapp_session.query(Radio).filter(Radio.uuid == radio_uuid).first()
+
+        name = 'default'
+        p = Playlist(name, r)
+        self.yaapp_session.add(p)
+        p = self.yaapp_session.query(Playlist).filter(Playlist.name == name, Playlist.radio_id == r.id).first()
+
+        self.yaapp_session.commit()
+
+        yasound_song_count = 50
+        for i in range(yasound_song_count):
+            name = 'song-%d' % i
+            artist_name = 'artist-%d' % i
+            album_name = 'album-%d' % i
+            y = YasoundSong(name=name, artist_name=artist_name, album_name=album_name)
+            self.yasound_session.add(y)
+            y = self.yasound_session.query(YasoundSong).filter(YasoundSong.name == name, YasoundSong.artist_name == artist_name, YasoundSong.album_name == album_name).first()
+
+            metadata = SongMetadata(name=y.name, artist_name=y.artist_name, album_name=y.album_name, duration=y.duration, yasound_song_id=y.id)
+            self.yaapp_session.add(metadata)
+
+        song_count = 50
+        for i in range(song_count):
+            idx = i % yasound_song_count
+            metadata = self.yaapp_session.query(SongMetadata).all()[idx]
+            song = SongInstance(song_metadata=metadata)
+            song.playlist_id = p.id
+            self.yaapp_session.add(song)
+
+        self.assertEqual(self.manager.builder.playlist_count(), 0)
+        self.manager.builder.check_playlists()
+        self.assertEqual(self.manager.builder.playlist_count(), 1)
+
+        # test song processing
+        songs = self.manager.builder.build_random_songs(p.id)
+        self.assertIsNotNone(songs)
+        self.assertNotEqual(len(songs), 0)
+        self.assertEqual(len(songs), self.manager.builder.SONG_COUNT_TO_PREPARE)
+
+        # test doc update
+        playlist_doc = self.manager.builder.playlist_collection.find_one({'playlist_id': p.id})
+        self.manager.builder.update_songs(playlist_doc)
+        playlist_doc = self.manager.builder.playlist_collection.find_one({'playlist_id': p.id})
+        self.assertIsNotNone(playlist_doc)
+        songs = playlist_doc['songs']
+        self.assertIsNotNone(songs)
+        self.assertNotEqual(len(songs), 0)
+        self.assertEqual(len(songs), self.manager.builder.SONG_COUNT_TO_PREPARE)
+
+        self.yaapp_session.commit()
+        self.yasound_session.commit()
