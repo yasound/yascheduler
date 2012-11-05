@@ -37,7 +37,7 @@ class RadioScheduler():
     CHECK_EXISTING_RADIOS_PERIOD = 10 * 60
     CHECK_PROGRAMMING_PERIOD = 30
 
-    def __init__(self, enable_ping_streamers=True, enable_programming_check=False):
+    def __init__(self, enable_ping_streamers=True, enable_programming_check=False, enable_time_profiling=False):
         self.current_step_time = datetime.now()
         self.last_step_time = self.current_step_time
 
@@ -46,6 +46,7 @@ class RadioScheduler():
 
         self.enable_ping_streamers = enable_ping_streamers
         self.enable_programming_check = enable_programming_check
+        self.enable_time_profiling = enable_time_profiling
 
         self.mongo_scheduler = settings.MONGO_DB.scheduler
 
@@ -143,6 +144,9 @@ class RadioScheduler():
 
         quit = False
         while not quit:
+            if self.enable_time_profiling:
+                time_profile_begin = datetime.now()
+
             self.current_step_time = datetime.now()
 
             # find events between last step and now
@@ -178,15 +182,25 @@ class RadioScheduler():
                 diff_timedelta = next_date - datetime.now()
                 seconds_to_wait = diff_timedelta.days * 86400 + diff_timedelta.seconds + diff_timedelta.microseconds / 1000000.0
                 seconds_to_wait = max(seconds_to_wait, 0)
-                # MatDebug
-                # self.logger.debug('%s seconds until next event' % seconds_to_wait)
-                # self.logger.debug('next event: %s' % next_event)
+                if self.enable_time_profiling:
+                    if seconds_to_wait == 0:
+                        self.logger.debug('....... need to process next events NOW !!!')
+                    else:
+                        self.logger.debug('....... wait for %s seconds' % seconds_to_wait)
+
+            # store date for next step
+            self.last_step_time = self.current_step_time
+
+            if self.enable_time_profiling:
+                elapsed = datetime.now() - time_profile_begin
+                elapsed_sec = elapsed.seconds + elapsed.microseconds / 1000000.0
+                percent = elapsed_sec / (elapsed_sec + seconds_to_wait)
+                self.logger.info('main loop: process = %s seconds / wait = %s seconds (%s%%)' % (elapsed_sec, seconds_to_wait, percent))
 
             # waits until next event
             time.sleep(seconds_to_wait)
 
-            # store date for next step
-            self.last_step_time = self.current_step_time
+
 
     def handle_event(self, event):
         # # debug duration

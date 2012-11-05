@@ -18,17 +18,20 @@ if __name__ == "__main__":
     parser.add_argument('--disable_ping', '-p', dest='disable_ping', action='store_const', const=True, default=False, help='disable streamer checking and ping, disable removal of dead streamers')
     parser.add_argument('--flush', '-f', dest='flush', action='store_const', const=True, default=False, help='flush yascheduler data and exit (does not start yascheduler main process)')
     parser.add_argument('--check_programming', '-c', dest='check_programming', action='store_const', const=True, default=False, help='adds events to regularly verify if radios programming is ok')
+    parser.add_argument('--time_profile', '-t', dest='time_profile', action='store_const', const=True, default=False, help='add time profile logs')
 
     args = parser.parse_args()
     enable_ping = not args.disable_ping
     flush = args.flush
     check_programming = args.check_programming
+    time_profile = args.time_profile
 
     Logger().log.info('enable streamers ping = %s' % (enable_ping))
     Logger().log.info('enable programming check = %s' % (check_programming))
+    Logger().log.info('enable time profiling = %s' % (time_profile))
     Logger().log.info('flush = %s' % (flush))
 
-    scheduler = RadioScheduler(enable_ping_streamers=enable_ping, enable_programming_check=check_programming)
+    scheduler = RadioScheduler(enable_ping_streamers=enable_ping, enable_programming_check=check_programming, enable_time_profiling=time_profile)
 
     if flush:
         scheduler.flush()
