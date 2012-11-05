@@ -194,7 +194,7 @@ class RadioScheduler():
             if self.enable_time_profiling:
                 elapsed = datetime.now() - time_profile_begin
                 elapsed_sec = elapsed.seconds + elapsed.microseconds / 1000000.0
-                percent = elapsed_sec / (elapsed_sec + seconds_to_wait)
+                percent = elapsed_sec / (elapsed_sec + seconds_to_wait) * 100
                 self.logger.info('main loop: process = %s seconds / wait = %s seconds (%s%%)' % (elapsed_sec, seconds_to_wait, percent))
 
             # waits until next event
