@@ -350,9 +350,8 @@ class RadioScheduler():
         2 - add a future event to prepare the next track
         """
         radio_state = self.radio_state_manager.radio_state(radio_uuid)
-        master_streamer = radio_state.master_streamer  # dest_streamer is the radio's master streamer
-        if master_streamer is not None:
-            message = self.publisher.send_prepare_track_message(radio_uuid, track.filename, delay, offset, crossfade_duration, master_streamer)
+        if radio_state is not None and radio_state.master_streamer is not None:  # dest_streamer is the radio's master streamer
+            message = self.publisher.send_prepare_track_message(radio_uuid, track.filename, delay, offset, crossfade_duration, radio_state.master_streamer)
         else:
             message = None
 
