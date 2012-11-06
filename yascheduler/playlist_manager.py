@@ -54,17 +54,13 @@ class PlaylistBuilder(Thread):
             # and remove old ones
             self.check_playlists()
 
-            # 2 - compute songs for newly created playlists
-            docs = self.playlist_collection.find({'update_date': None})
-            for doc in docs:
-                self.update_songs(doc)
-
-            # 3 - compute songs for playlists whose song queue contains less than x songs
+            # 2 - compute songs for playlists whose song queue contains less than x songs
+            # it includes newly created playlists
             docs = self.playlist_collection.find({'song_count': {'$lt': self.MIN_SONG_COUNT}})
             for doc in docs:
                 self.update_songs(doc)
 
-            # 4 - sleep
+            # 3 - sleep
             time.sleep(1)
 
     def playlist_count(self):
