@@ -17,7 +17,6 @@ from sqlalchemy.orm import sessionmaker
 from playlist_manager import PlaylistManager
 from current_song_manager import CurrentSongManager
 import gevent
-from gevent.pool import Pool
 
 
 class RadioScheduler():
@@ -143,7 +142,6 @@ class RadioScheduler():
 
         quit = False
 
-        pool = Pool(4)
         while not quit:
             if self.enable_time_profiling:
                 time_profile_begin = datetime.now()
@@ -157,7 +155,7 @@ class RadioScheduler():
 
             for e in events:
                 # handle event
-                pool.spawn(self.handle_event, e)
+                self.handle_event(e)
             # remove events from list
             self.radio_events.remove(events_query)
 
