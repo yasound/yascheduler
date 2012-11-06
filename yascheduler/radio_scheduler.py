@@ -147,7 +147,8 @@ class RadioScheduler():
             self.current_step_time = datetime.now()
 
             # find events between last step and now
-            events = self.radio_events.find({'date': {'$lte': self.current_step_time}})
+            events_query = {'date': {'$lte': self.current_step_time}}
+            events = self.radio_events.find(events_query)
             # MatDebug
             # self.logger.info('loop... handle %d events' % events.count())
             self.logger.info('...........................................')
@@ -155,8 +156,8 @@ class RadioScheduler():
             for e in events:
                 # handle event
                 self.handle_event(e)
-                # remove event from list
-                self.radio_events.remove({'_id': e['_id']})
+            # remove events from list
+            self.radio_events.remove(events_query)
 
             # find next event
             next_events = self.radio_events.find({'date': {'$gt': self.current_step_time}}).sort([('date', ASCENDING)]).limit(1)
