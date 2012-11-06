@@ -6,7 +6,6 @@ from models.account_alchemy_models import User
 from datetime import datetime, timedelta, date
 import time
 from pymongo import ASCENDING, DESCENDING
-from threading import Lock
 import requests
 from streamer_checker import StreamerChecker
 from redis_listener import RedisListener
@@ -75,8 +74,6 @@ class RadioScheduler():
         self.yasound_alchemy_session = scoped_session(session_factory)
 
         self.shows = settings.MONGO_DB.shows
-
-        self.lock = Lock()
 
         # remove past events (those which sould have occured when the scheduler was off)
         self.cure_radio_events()
@@ -150,9 +147,7 @@ class RadioScheduler():
             self.current_step_time = datetime.now()
 
             # find events between last step and now
-            self.lock.acquire(True)
             events = self.radio_events.find({'date': {'$lte': self.current_step_time}})
-            self.lock.release()
             # MatDebug
             # self.logger.info('loop... handle %d events' % events.count())
             self.logger.info('...........................................')
@@ -161,14 +156,10 @@ class RadioScheduler():
                 # handle event
                 self.handle_event(e)
                 # remove event from list
-                self.lock.acquire(True)
                 self.radio_events.remove({'_id': e['_id']})
-                self.lock.release()
 
             # find next event
-            self.lock.acquire(True)
             next_events = self.radio_events.find({'date': {'$gt': self.current_step_time}}).sort([('date', ASCENDING)]).limit(1)
-            self.lock.release()
             next_event = None
             if next_events is not None and next_events.count() >= 1:
                 next_event = next_events[0]
@@ -276,9 +267,7 @@ class RadioScheduler():
                             'delay_before_play': self.SONG_PREPARE_DURATION,
                             'crossfade_duration': self.CROSSFADE_DURATION
                 }
-                self.lock.acquire(True)
                 self.radio_events.insert(event, safe=True)
-                self.lock.release()
 
         # add next hour event
         self.add_next_hour_event()
@@ -381,9 +370,7 @@ class RadioScheduler():
                 'delay_before_play': next_delay_before_play,
                 'crossfade_duration': next_crossfade_duration
         }
-        self.lock.acquire(True)
         self.radio_events.insert(event, safe=True)
-        self.lock.release()
 
         return message
 
@@ -429,9 +416,7 @@ class RadioScheduler():
             event['song_id'] = track.song_id  # add the song id in the event if the track is a song
         if track.is_from_show:
             event['show_id'] = track.show_id
-        self.lock.acquire(True)
         self.radio_events.insert(event, safe=True)
-        self.lock.release()
         # # debug duration
         # elapsed = datetime.now() - b
         # self.logger.debug('----- %s store track start event' % elapsed)
@@ -815,9 +800,7 @@ class RadioScheduler():
         self.logger.debug('*** check existing radios: DONE')
 
     def clean_radio_events(self, radio_uuid):
-        self.lock.acquire(True)
         self.radio_events.remove({'radio_uuid': radio_uuid})
-        self.lock.release()
 
     def clean_radio_state(self, radio_uuid):
         """
@@ -841,9 +824,7 @@ class RadioScheduler():
         """
         remove all radio events older than now
         """
-        self.lock.acquire(True)
         self.radio_events.remove({'date': {'$lt': datetime.now()}})
-        self.lock.release()
 
     def register_streamer(self, streamer_name):
         streamer = {'name': streamer_name,
