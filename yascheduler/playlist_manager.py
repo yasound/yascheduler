@@ -23,7 +23,7 @@ class PlaylistBuilder(Thread):
         self.logger = Logger().log
 
         self.playlist_collection = settings.MONGO_DB.scheduler.playlists
-        self.playlist_collection.ensure_index('playlist_id')
+        self.playlist_collection.ensure_index('playlist_id', unique=True)
         self.playlist_collection.ensure_index('radio_uuid')
         self.playlist_collection.ensure_index('playlist_is_default')
         self.playlist_collection.ensure_index('update_date')
@@ -183,7 +183,7 @@ class PlaylistBuilder(Thread):
         add the new ones,
         remove those which no longer exist
         """
-        ids = self.yaapp_alchemy_session.query(Playlist).join(Radio).filter(Radio.ready == True, Playlist.name == 'default').values(Playlist.id)
+        ids = self.yaapp_alchemy_session.query(Playlist).join(Radio).filter(Radio.ready == True, Radio.origin == 0, Playlist.name == 'default').values(Playlist.id)
         default_playlists = set([x[0] for x in ids])
 
         show_playlists = set()

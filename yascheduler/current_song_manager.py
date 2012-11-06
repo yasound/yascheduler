@@ -38,18 +38,23 @@ class CurrentSongManager(Thread):
             return
 
         self.logger.info('CurrentSongManager report %d songs' % len(reports))
-        # send request...
-        url = settings.YASOUND_SERVER + '/api/v1/songs_started/'
-        payload = {'key': settings.SCHEDULER_KEY, 'data': reports}
-        response = requests.post(url, data=json.dumps(payload))
-        result = response.json
-        if response.status_code != 200:
-            self.logger.info('current songs request failed: status code = %d' % response.status_code)
-        elif result['success'] == False:
-            self.logger.info('current songs request error: %s' % result['error'])
 
-        # clear songs
-        self.current_songs.remove()
+        try:
+            #  send request...
+            url = settings.YASOUND_SERVER + '/api/v1/songs_started/'
+            payload = {'key': settings.SCHEDULER_KEY, 'data': reports}
+            response = requests.post(url, data=json.dumps(payload))
+            result = response.json
+            if response.status_code != 200:
+                self.logger.info('current songs request failed: status code = %d' % response.status_code)
+            elif result['success'] == False:
+                self.logger.info('current songs request error: %s' % result['error'])
+
+            # clear songs
+            self.current_songs.remove()
+
+        except Exception, e:
+            self.logger.info('CurrentSongManager report exception: %s' % str(e))
 
     def store(self, radio_uuid, song_id):
         doc = {

@@ -371,7 +371,14 @@ class RadioScheduler():
                 'delay_before_play': next_delay_before_play,
                 'crossfade_duration': next_crossfade_duration
         }
+        # # debug duration
+        # b = datetime.now()
+        # #
         self.radio_events.insert(event, safe=True)
+        # # debug duration
+        # elapsed = datetime.now() - b
+        # self.logger.debug('----- %s store track prepare event' % elapsed)
+        # #
 
         return message
 
@@ -397,9 +404,6 @@ class RadioScheduler():
         # self.logger.debug('----- %s get next track' % elapsed)
         # #
 
-        # # debug duration
-        # b = datetime.now()
-        # #
         if track is None:
             self.logger.debug('prepare_track ERROR: cannot get next track')
             return None
@@ -417,6 +421,10 @@ class RadioScheduler():
             event['song_id'] = track.song_id  # add the song id in the event if the track is a song
         if track.is_from_show:
             event['show_id'] = track.show_id
+
+        # # debug duration
+        # b = datetime.now()
+        # #
         self.radio_events.insert(event, safe=True)
         # # debug duration
         # elapsed = datetime.now() - b
