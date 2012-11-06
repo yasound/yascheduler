@@ -6,8 +6,10 @@ import json
 from logger import Logger
 from sqlalchemy.orm import scoped_session
 from sqlalchemy.orm import sessionmaker
+import gevent
+from gevent import Greenlet
 
-class RedisListener(Thread):
+class RedisListener(Greenlet):
     WAIT_TIME = 0.020  # seconds
 
     TYPE_MESSAGE_TEST = 'test'
@@ -23,7 +25,7 @@ class RedisListener(Thread):
     REDIS_LISTEN_CHANNEL = 'yascheduler'
 
     def __init__(self, radio_scheduler):
-        Thread.__init__(self)
+        Greenlet.__init__(self)
         self.radio_scheduler = radio_scheduler
         self.logger = Logger().log
 
@@ -33,7 +35,7 @@ class RedisListener(Thread):
         session_factory = sessionmaker(bind=settings.yasound_alchemy_engine)
         self.yasound_alchemy_session = scoped_session(session_factory)
 
-    def run(self):
+    def _run(self):
         self.logger.debug('Redis listener run...')
         try:
             r = redis.StrictRedis(host=settings.REDIS_HOST, db=settings.REDIS_DB)

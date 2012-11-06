@@ -1,16 +1,17 @@
 import time
-from threading import Thread
+import gevent
+from gevent import Greenlet
 import settings
 import requests
 import json
 from logger import Logger
 
 
-class CurrentSongManager(Thread):
+class CurrentSongManager(Greenlet):
     WAIT_TIME = 15  # seconds
 
     def __init__(self):
-        Thread.__init__(self)
+        Greenlet.__init__(self)
 
         self.quit = False
         self.WAIT_TIME = 2
@@ -21,12 +22,12 @@ class CurrentSongManager(Thread):
     def flush(self):
         self.current_songs.remove()
 
-    def run(self):
+    def _run(self):
         while self.quit == False:
             self.report()
 
             # sleep
-            time.sleep(self.WAIT_TIME)
+            gevent.sleep(self.WAIT_TIME)
 
     def report(self):
         docs = self.current_songs.find()

@@ -16,7 +16,7 @@ from sqlalchemy.orm import scoped_session
 from sqlalchemy.orm import sessionmaker
 from playlist_manager import PlaylistManager
 from current_song_manager import CurrentSongManager
-
+import gevent
 
 class RadioScheduler():
     EVENT_TYPE_NEW_HOUR_PREPARE = 'prepare_new_hour'
@@ -153,6 +153,7 @@ class RadioScheduler():
 
             for e in events:
                 # handle event
+                #gevent.spawn(self.handle_event, e)
                 self.handle_event(e)
             # remove events from list
             self.radio_events.remove(events_query)
