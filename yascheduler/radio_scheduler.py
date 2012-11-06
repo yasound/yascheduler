@@ -17,6 +17,8 @@ from sqlalchemy.orm import sessionmaker
 from playlist_manager import PlaylistManager
 from current_song_manager import CurrentSongManager
 import gevent
+from gevent.pool import Pool
+
 
 class RadioScheduler():
     EVENT_TYPE_NEW_HOUR_PREPARE = 'prepare_new_hour'
@@ -140,6 +142,8 @@ class RadioScheduler():
             self.add_next_check_programming_event(self.CHECK_PROGRAMMING_PERIOD)
 
         quit = False
+
+        pool = Pool(4)
         while not quit:
             if self.enable_time_profiling:
                 time_profile_begin = datetime.now()
@@ -153,8 +157,7 @@ class RadioScheduler():
 
             for e in events:
                 # handle event
-                #gevent.spawn(self.handle_event, e)
-                self.handle_event(e)
+                pool.spawn(self.handle_event, e)
             # remove events from list
             self.radio_events.remove(events_query)
 
