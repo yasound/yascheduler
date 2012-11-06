@@ -148,9 +148,7 @@ class RadioScheduler():
 
             # find events between last step and now
             events_query = {'date': {'$lte': self.current_step_time}}
-            events = self.radio_events.find(events_query)
-            # MatDebug
-            # self.logger.info('loop... handle %d events' % events.count())
+            events = self.radio_events.find(events_query).sort([('date', ASCENDING)])
             self.logger.info('...........................................')
 
             for e in events:
@@ -191,8 +189,6 @@ class RadioScheduler():
 
             # waits until next event
             time.sleep(seconds_to_wait)
-
-
 
     def handle_event(self, event):
         # # debug duration
@@ -306,9 +302,6 @@ class RadioScheduler():
         song_id = event.get('song_id', None)
         show_id = event.get('show_id', None)
 
-        # MatDebug
-        # self.logger.debug('track start (%s - %s)' % (radio_uuid, song_id))
-
         radio_state = self.radio_state_manager.radio_state(radio_uuid)
         radio_state.song_id = song_id
         radio_state.play_time = self.current_step_time
@@ -362,8 +355,6 @@ class RadioScheduler():
         next_delay_before_play = self.SONG_PREPARE_DURATION
         next_crossfade_duration = self.CROSSFADE_DURATION
         next_date = self.current_step_time + timedelta(seconds=(delay + track.duration - offset - next_crossfade_duration - next_delay_before_play))
-        # MatDebug
-        # self.logger.debug('store next prepare track (file DURATION: %s)' % track.duration)
         event = {
                 'type': self.EVENT_TYPE_NEW_TRACK_PREPARE,
                 'date': next_date,
