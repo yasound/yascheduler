@@ -341,7 +341,6 @@ class RadioScheduler():
         new 'track prepare' event has been received
         we have a delay before a new track must be played in order to prepare this track
         """
-        self.logger.debug('\n*********************')
         # # debug duration
         # begin = datetime.now()
         # #
