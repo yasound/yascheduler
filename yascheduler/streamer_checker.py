@@ -1,15 +1,16 @@
 import time
 from threading import Thread
+from gevent import Greenlet
+import gevent
 
-
-class StreamerChecker(Thread):
+class StreamerChecker(Greenlet):
     WAIT_TIME = 15  # seconds
 
     def __init__(self, radio_scheduler):
-        Thread.__init__(self)
+        Greenlet.__init__(self)
         self.radio_scheduler = radio_scheduler
 
-    def run(self):
+    def _run(self):
         quit = False
         while not quit:
             # unregister dead streamers (those who haven't answered to ping message)
@@ -22,4 +23,4 @@ class StreamerChecker(Thread):
             self.radio_scheduler.ping_all_streamers()
 
             # sleep
-            time.sleep(self.WAIT_TIME)
+            gevent.sleep(self.WAIT_TIME)
