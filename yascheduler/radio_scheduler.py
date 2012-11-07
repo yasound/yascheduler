@@ -151,9 +151,11 @@ class RadioScheduler():
             events = self.radio_events.find(events_query).sort([('date', ASCENDING)])
             self.logger.info('...........................................')
 
+            event_count = 0
             for e in events:
                 # handle event
                 self.handle_event(e)
+                event_count += 1
             # remove events from list
             self.radio_events.remove(events_query)
 
@@ -173,6 +175,7 @@ class RadioScheduler():
                 seconds_to_wait = diff_timedelta.days * 86400 + diff_timedelta.seconds + diff_timedelta.microseconds / 1000000.0
                 seconds_to_wait = max(seconds_to_wait, 0)
                 if self.enable_time_profiling:
+                    self.logger.debug('....... %d events handled' % event_count)
                     if seconds_to_wait == 0:
                         self.logger.debug('....... need to process next events NOW !!!')
                     else:
