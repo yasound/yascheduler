@@ -304,7 +304,10 @@ class PlaylistManager():
         song = self.builder.yaapp_alchemy_session.query(SongInstance).filter(SongInstance.enabled == True, SongInstance.playlist_id == playlist_id).order_by(SongInstance.last_play_time).first()
         if song == None:
             return None
-        yasound_song = self.builder.yasound_alchemy_session.query(YasoundSong).get(song.song_metadata.yasound_song_id)
+        yasound_song_id = song.song_metadata.yasound_song_id
+        if yasound_song_id == None:
+            return None
+        yasound_song = self.builder.yasound_alchemy_session.query(YasoundSong).get(yasound_song_id)
         if yasound_song == None:
             return None
         data = {
