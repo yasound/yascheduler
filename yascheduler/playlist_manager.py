@@ -16,6 +16,7 @@ class PlaylistBuilder(Thread):
 
     SONG_COUNT_TO_PREPARE = 50
     MIN_SONG_COUNT = 3
+    CHECK_PLAYLIST_PERIOD = 10 * 60
 
     def __init__(self):
         Thread.__init__(self)
@@ -51,12 +52,16 @@ class PlaylistBuilder(Thread):
         super(PlaylistBuilder, self).join(timeout)
 
     def run(self):
+        last_check_playlist_date = None
         while not self.quit.is_set():
             self.logger.debug('PlaylistBuilder.....')
 
             # 1 - create entries for new playlists
             # and remove old ones
-            self.check_playlists()
+            if last_check_playlist_date == None or (datetime.now() - last_check_playlist_date).seconds > self.CHECK_PLAYLIST_PERIOD:
+                self.logger.info('playlist manager check playlists')
+                self.check_playlists()
+                last_check_playlist_date = datetime.now()
 
             # 2 - compute songs for playlists whose song queue contains less than x songs
             # it includes newly created playlists
@@ -71,6 +76,14 @@ class PlaylistBuilder(Thread):
         return self.playlist_collection.count()
 
     def update_songs(self, playlist_doc):
+        songs = self.build_songs(playlist_doc)
+
+        playlist_doc['songs'] = songs
+        playlist_doc['song_count'] = len(songs)
+        playlist_doc['update_date'] = datetime.now()
+        self.playlist_collection.update({'_id': playlist_doc['_id']}, playlist_doc)
+
+    def build_songs(self, playlist_doc):
         playlist_id = playlist_doc['playlist_id']
         show_id = playlist_doc['show_id']
         songs = []
@@ -78,11 +91,7 @@ class PlaylistBuilder(Thread):
             songs = self.build_random_songs(playlist_id)
         else:
             songs = self.build_show_songs(playlist_id, show_id)
-
-        playlist_doc['songs'] = songs
-        playlist_doc['song_count'] = len(songs)
-        playlist_doc['update_date'] = datetime.now()
-        self.playlist_collection.update({'_id': playlist_doc['_id']}, playlist_doc)
+        return songs
 
     def build_show_songs(self, playlist_id, show_id):
         show = self.shows.find_one({'_id': show_id})
