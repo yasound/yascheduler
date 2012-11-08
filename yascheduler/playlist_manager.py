@@ -56,7 +56,7 @@ class PlaylistBuilder(Thread):
 
             # 1 - create entries for new playlists
             # and remove old ones
-            # self.check_playlists()
+            self.check_playlists()
 
             # 2 - compute songs for playlists whose song queue contains less than x songs
             # it includes newly created playlists

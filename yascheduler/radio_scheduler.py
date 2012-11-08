@@ -787,9 +787,6 @@ class RadioScheduler():
         self.logger.info('### check radios programming: DONE')
 
     def check_existing_radios(self):
-        #FIXME: temp
-        return
-        #
         self.logger.debug('*** check existing radios: add new radios and remove deleted radios')
         scheduler_radio_uuids = set(self.radio_state_manager.radio_states.find().distinct('radio_uuid'))
         radios = self.yaapp_alchemy_session.query(Radio).filter(Radio.ready == True, Radio.origin == 0)  # origin == 0 is for radios created in yasound
