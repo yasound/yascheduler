@@ -7,7 +7,6 @@ from logger import Logger
 
 
 class CurrentSongManager(Thread):
-    WAIT_TIME = 15  # seconds
 
     def __init__(self):
         Thread.__init__(self)
