@@ -1,4 +1,4 @@
-from threading import Thread
+from threading import Thread, Event
 import settings
 from logger import Logger
 from sqlalchemy.orm import scoped_session
@@ -40,19 +40,23 @@ class PlaylistBuilder(Thread):
         # access to shows
         self.shows = settings.MONGO_DB.shows
 
-        self.quit = False
+        self.quit = Event()
 
     def clear_data(self):
         self.playlist_collection.remove()
         self.playlist_collection.drop()
 
+    def join(self, timeout=None):
+        self.quit.set()
+        super(PlaylistBuilder, self).join(timeout)
+
     def run(self):
-        while self.quit == False:
+        while not self.quit.is_set():
             self.logger.debug('PlaylistBuilder.....')
 
             # 1 - create entries for new playlists
             # and remove old ones
-            self.check_playlists()
+            # self.check_playlists()
 
             # 2 - compute songs for playlists whose song queue contains less than x songs
             # it includes newly created playlists
@@ -232,6 +236,9 @@ class PlaylistManager():
 
     def start_thread(self):
         self.builder.start()
+
+    def join_thread(self, timeout=None):
+        self.builder.join(timeout)
 
     def flush(self):
         self.builder.clear_data()

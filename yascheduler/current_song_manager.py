@@ -1,5 +1,5 @@
 import time
-from threading import Thread
+from threading import Thread, Event
 import settings
 import requests
 import json
@@ -11,7 +11,7 @@ class CurrentSongManager(Thread):
     def __init__(self):
         Thread.__init__(self)
 
-        self.quit = False
+        self.quit = Event()
         self.WAIT_TIME = 2
         self.logger = Logger().log
 
@@ -19,6 +19,10 @@ class CurrentSongManager(Thread):
 
     def flush(self):
         self.current_songs.remove()
+
+    def join(self, timeout=None):
+        self.quit.set()
+        super(CurrentSongManager, self).join(timeout)
 
     def run(self):
         while self.quit == False:

@@ -1,5 +1,5 @@
 import time
-from threading import Thread
+from threading import Thread, Event
 
 
 class StreamerChecker(Thread):
@@ -8,10 +8,10 @@ class StreamerChecker(Thread):
     def __init__(self, radio_scheduler):
         Thread.__init__(self)
         self.radio_scheduler = radio_scheduler
+        self.quit = Event()
 
     def run(self):
-        quit = False
-        while not quit:
+        while not self.quit.is_set():
             # unregister dead streamers (those who haven't answered to ping message)
             dead_streamers = self.radio_scheduler.streamers.find({'ping_status': self.radio_scheduler.STREAMER_PING_STATUS_WAITING})
             for dead in dead_streamers:
@@ -23,3 +23,7 @@ class StreamerChecker(Thread):
 
             # sleep
             time.sleep(self.WAIT_TIME)
+
+    def join(self, timeout=None):
+        self.quit.set()
+        super(StreamerChecker, self).join(timeout)

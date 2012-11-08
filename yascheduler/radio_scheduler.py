@@ -17,7 +17,6 @@ from sqlalchemy.orm import sessionmaker
 from playlist_manager import PlaylistManager
 from current_song_manager import CurrentSongManager
 
-
 class RadioScheduler():
     EVENT_TYPE_NEW_HOUR_PREPARE = 'prepare_new_hour'
     EVENT_TYPE_NEW_TRACK_PREPARE = 'prepare_new_track'
@@ -41,11 +40,16 @@ class RadioScheduler():
         self.last_step_time = self.current_step_time
 
         self.logger = Logger().log
-        self.publisher = RedisPublisher('yastream')
 
         self.enable_ping_streamers = enable_ping_streamers
         self.enable_programming_check = enable_programming_check
         self.enable_time_profiling = enable_time_profiling
+
+        session_factory = sessionmaker(bind=settings.yaapp_alchemy_engine)
+        self.yaapp_alchemy_session = scoped_session(session_factory)
+
+        session_factory = sessionmaker(bind=settings.yasound_alchemy_engine)
+        self.yasound_alchemy_session = scoped_session(session_factory)
 
         self.mongo_scheduler = settings.MONGO_DB.scheduler
 
@@ -54,10 +58,6 @@ class RadioScheduler():
         self.radio_events.ensure_index('date')
         self.radio_events.ensure_index('type')
 
-        self.radio_state_manager = RadioStateManager()
-
-        self.redis_listener = RedisListener(self)
-
         self.streamers = self.mongo_scheduler.streamers
         self.streamers.ensure_index('name', unique=True)
 
@@ -65,21 +65,18 @@ class RadioScheduler():
         self.listeners.ensure_index('radio_uuid')
         self.listeners.ensure_index('session_id', unique=True)
 
-        self.songs_started = self.mongo_scheduler.songs_started
-
-        session_factory = sessionmaker(bind=settings.yaapp_alchemy_engine)
-        self.yaapp_alchemy_session = scoped_session(session_factory)
-
-        session_factory = sessionmaker(bind=settings.yasound_alchemy_engine)
-        self.yasound_alchemy_session = scoped_session(session_factory)
-
         self.shows = settings.MONGO_DB.shows
+
+        # tools
+        self.publisher = RedisPublisher('yastream')
+        self.redis_listener = RedisListener(self)
+        self.radio_state_manager = RadioStateManager()
+        self.streamer_checker = StreamerChecker(self)
+        self.playlist_manager = PlaylistManager()
+        self.current_song_manager = CurrentSongManager()
 
         # remove past events (those which sould have occured when the scheduler was off)
         self.cure_radio_events()
-
-        self.playlist_manager = PlaylistManager()
-        self.current_song_manager = CurrentSongManager()
 
     def clear_mongo(self):
         self.radio_events.drop()
@@ -106,8 +103,7 @@ class RadioScheduler():
 
         # starts streamer checker thread
         if self.enable_ping_streamers:
-            checker = StreamerChecker(self)
-            checker.start()
+            self.streamer_checker.start()
 
         # check existing radios
         self.check_existing_radios()
@@ -192,6 +188,14 @@ class RadioScheduler():
 
             # waits until next event
             time.sleep(seconds_to_wait)
+
+        self.logger.info('radio scheduler main loop is over')
+        self.streamer_checker.join()
+        self.redis_listener.join()
+        self.playlist_manager.join_thread()
+        self.current_song_manager.join()
+
+        self.logger.info('radio scheduler "run" is over')
 
     def handle_event(self, event):
         # # debug duration
@@ -783,6 +787,9 @@ class RadioScheduler():
         self.logger.info('### check radios programming: DONE')
 
     def check_existing_radios(self):
+        #FIXME: temp
+        return
+        #
         self.logger.debug('*** check existing radios: add new radios and remove deleted radios')
         scheduler_radio_uuids = set(self.radio_state_manager.radio_states.find().distinct('radio_uuid'))
         radios = self.yaapp_alchemy_session.query(Radio).filter(Radio.ready == True, Radio.origin == 0)  # origin == 0 is for radios created in yasound
