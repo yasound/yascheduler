@@ -18,7 +18,6 @@ from playlist_manager import PlaylistManager
 from current_song_manager import CurrentSongManager
 import gevent
 
-
 class RadioScheduler():
     EVENT_TYPE_NEW_HOUR_PREPARE = 'prepare_new_hour'
     EVENT_TYPE_NEW_TRACK_PREPARE = 'prepare_new_track'
@@ -42,11 +41,16 @@ class RadioScheduler():
         self.last_step_time = self.current_step_time
 
         self.logger = Logger().log
-        self.publisher = RedisPublisher('yastream')
 
         self.enable_ping_streamers = enable_ping_streamers
         self.enable_programming_check = enable_programming_check
         self.enable_time_profiling = enable_time_profiling
+
+        session_factory = sessionmaker(bind=settings.yaapp_alchemy_engine)
+        self.yaapp_alchemy_session = scoped_session(session_factory)
+
+        session_factory = sessionmaker(bind=settings.yasound_alchemy_engine)
+        self.yasound_alchemy_session = scoped_session(session_factory)
 
         self.mongo_scheduler = settings.MONGO_DB.scheduler
 
@@ -55,10 +59,6 @@ class RadioScheduler():
         self.radio_events.ensure_index('date')
         self.radio_events.ensure_index('type')
 
-        self.radio_state_manager = RadioStateManager()
-
-        self.redis_listener = RedisListener(self)
-
         self.streamers = self.mongo_scheduler.streamers
         self.streamers.ensure_index('name', unique=True)
 
@@ -66,21 +66,18 @@ class RadioScheduler():
         self.listeners.ensure_index('radio_uuid')
         self.listeners.ensure_index('session_id', unique=True)
 
-        self.songs_started = self.mongo_scheduler.songs_started
-
-        session_factory = sessionmaker(bind=settings.yaapp_alchemy_engine)
-        self.yaapp_alchemy_session = scoped_session(session_factory)
-
-        session_factory = sessionmaker(bind=settings.yasound_alchemy_engine)
-        self.yasound_alchemy_session = scoped_session(session_factory)
-
         self.shows = settings.MONGO_DB.shows
+
+        # tools
+        self.publisher = RedisPublisher('yastream')
+        self.redis_listener = RedisListener(self)
+        self.radio_state_manager = RadioStateManager()
+        self.streamer_checker = StreamerChecker(self)
+        self.playlist_manager = PlaylistManager()
+        self.current_song_manager = CurrentSongManager()
 
         # remove past events (those which sould have occured when the scheduler was off)
         self.cure_radio_events()
-
-        self.playlist_manager = PlaylistManager()
-        self.current_song_manager = CurrentSongManager()
 
     def clear_mongo(self):
         self.radio_events.drop()
@@ -107,8 +104,7 @@ class RadioScheduler():
 
         # starts streamer checker thread
         if self.enable_ping_streamers:
-            checker = StreamerChecker(self)
-            checker.start()
+            self.streamer_checker.start()
 
         # check existing radios
         self.check_existing_radios()
@@ -153,9 +149,11 @@ class RadioScheduler():
             events = self.radio_events.find(events_query).sort([('date', ASCENDING)])
             self.logger.info('...........................................')
 
+            event_count = 0
             for e in events:
                 # handle event
                 self.handle_event(e)
+                event_count += 1
             # remove events from list
             self.radio_events.remove(events_query)
 
@@ -175,6 +173,7 @@ class RadioScheduler():
                 seconds_to_wait = diff_timedelta.days * 86400 + diff_timedelta.seconds + diff_timedelta.microseconds / 1000000.0
                 seconds_to_wait = max(seconds_to_wait, 0)
                 if self.enable_time_profiling:
+                    self.logger.debug('....... %d events handled' % event_count)
                     if seconds_to_wait == 0:
                         self.logger.debug('....... need to process next events NOW !!!')
                     else:
@@ -191,6 +190,14 @@ class RadioScheduler():
 
             # waits until next event
             time.sleep(seconds_to_wait)
+
+        self.logger.info('radio scheduler main loop is over')
+        self.streamer_checker.join()
+        self.redis_listener.join()
+        self.playlist_manager.join_thread()
+        self.current_song_manager.join()
+
+        self.logger.info('radio scheduler "run" is over')
 
     def handle_event(self, event):
         # # debug duration
@@ -303,10 +310,12 @@ class RadioScheduler():
             return
         song_id = event.get('song_id', None)
         show_id = event.get('show_id', None)
+        song_duration = event.get('track_duration', 0)
 
         radio_state = self.radio_state_manager.radio_state(radio_uuid)
         radio_state.song_id = song_id
         radio_state.play_time = self.current_step_time
+        radio_state.song_end_time = song_duration
         if show_id is None:
             radio_state.show_id = None
             radio_state.show_time = None
@@ -401,6 +410,7 @@ class RadioScheduler():
             self.logger.debug('prepare_track ERROR: cannot get next track')
             return None
         track_filename = track.filename
+        track_duration = track.duration
         offset = 0
 
         # 2 store 'track start' event
@@ -409,6 +419,7 @@ class RadioScheduler():
                 'date': self.current_step_time + timedelta(seconds=delay_before_play),
                 'radio_uuid': radio_uuid,
                 'filename': track_filename,
+                'track_duration': track_duration
         }
         if track.is_song:
             event['song_id'] = track.song_id  # add the song id in the event if the track is a song
@@ -542,8 +553,9 @@ class RadioScheduler():
             master_streamer = radio_state.master_streamer
             message = self.publisher.send_radio_exists_message(radio_uuid, streamer, master_streamer)
 
-        # #FIXME: to check...
-        if self.radio_events.find({'radio_uuid': radio_uuid, 'type': self.EVENT_TYPE_NEW_TRACK_PREPARE}).count() == 0:
+        # if radio's programming is broken
+        # ie current song has been played and no next song has been programmed
+        if radio_state.song_end_time < datetime.now():
             self.prepare_track(radio_uuid, 0, 0)
         return message
 
@@ -773,12 +785,10 @@ class RadioScheduler():
         self.radio_events.insert(event, safe=True)
 
     def check_programming(self):
-        self.logger.info('### check radios programming: verify that every radio will receive "prepare track" event in the furute')
-        scheduler_radio_uuids = self.radio_state_manager.radio_states.find().distinct('radio_uuid')
-        for uuid in scheduler_radio_uuids:
-            event_count = self.radio_events.find({'type': self.EVENT_TYPE_NEW_TRACK_PREPARE, 'radio_uuid': uuid}).count()
-            if event_count == 0:
-                self.logger.info('!!!!! radio %s: programming broken' % uuid)
+        self.logger.info('### check radios programming: verify that current song end time is not over for every radio')
+        for doc in self.radio_state_manager.broken_radios():
+            radio_uuid = doc['radio_uuid']
+            self.logger.info('!!!!! radio %s: programming broken' % radio_uuid)
         self.logger.info('### check radios programming: DONE')
 
     def check_existing_radios(self):
@@ -792,6 +802,7 @@ class RadioScheduler():
 
         for uuid in to_remove:
             self.radio_state_manager.remove(uuid)
+            self.clean_radio_events(uuid)
 
         # uuids to add to radio states (new radios)
         to_add = db_radio_uuids.difference(scheduler_radio_uuids)

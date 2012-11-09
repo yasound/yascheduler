@@ -1,49 +1,47 @@
 import time
-import gevent
-from gevent import Greenlet
+from threading import Thread, Event
 import settings
 import requests
 import json
 from logger import Logger
+from datetime import datetime
 
 
-class CurrentSongManager(Greenlet):
-    WAIT_TIME = 15  # seconds
+class CurrentSongManager(Thread):
 
     def __init__(self):
-        Greenlet.__init__(self)
+        Thread.__init__(self)
 
-        self.quit = False
+        self.quit = Event()
         self.WAIT_TIME = 2
         self.logger = Logger().log
 
-        self.current_songs = settings.MONGO_DB.scheduler.current_songs
+        self.current_songs = []
 
     def flush(self):
-        self.current_songs.remove()
+        self.current_songs = []
 
-    def _run(self):
-        while self.quit == False:
+    def join(self, timeout=None):
+        self.quit.set()
+        super(CurrentSongManager, self).join(timeout)
+
+    def run(self):
+        while not self.quit.is_set():
             self.report()
 
             # sleep
-            gevent.sleep(self.WAIT_TIME)
+            time.sleep(self.WAIT_TIME)
 
     def report(self):
-        docs = self.current_songs.find()
-        reports = []
-        for d in docs:
-            data = [d['radio_uuid'], d['song_id']]
-            reports.append(data)
-        if len(reports) == 0:
+        if len(self.current_songs) == 0:
             return
 
-        self.logger.info('CurrentSongManager report %d songs' % len(reports))
+        self.logger.info('CurrentSongManager report %d songs' % len(self.current_songs))
 
         try:
             #  send request...
             url = settings.YASOUND_SERVER + '/api/v1/songs_started/'
-            payload = {'key': settings.SCHEDULER_KEY, 'data': reports}
+            payload = {'key': settings.SCHEDULER_KEY, 'data': self.current_songs}
             response = requests.post(url, data=json.dumps(payload))
             result = response.json
             if response.status_code != 200:
@@ -52,14 +50,12 @@ class CurrentSongManager(Greenlet):
                 self.logger.info('current songs request error: %s' % result['error'])
 
             # clear songs
-            self.current_songs.remove()
+            self.flush()
 
         except Exception, e:
             self.logger.info('CurrentSongManager report exception: %s' % str(e))
 
-    def store(self, radio_uuid, song_id):
-        doc = {
-                'radio_uuid': radio_uuid,
-                'song_id': song_id
-        }
-        self.current_songs.update({'radio_uuid': radio_uuid}, doc, upsert=True)
+    def store(self, radio_uuid, song_id, play_date=None):
+        if play_date == None:
+            play_date = datetime.now()
+        self.current_songs.append([radio_uuid, song_id, play_date.isoformat()])

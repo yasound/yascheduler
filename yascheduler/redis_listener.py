@@ -39,10 +39,10 @@ class RedisListener(Greenlet):
         self.logger.debug('Redis listener run...')
         try:
             r = redis.StrictRedis(host=settings.REDIS_HOST, db=settings.REDIS_DB)
-            r = r.pubsub()
+            self.pubsub = r.pubsub()
             channel = self.REDIS_LISTEN_CHANNEL
-            r.subscribe(channel)
-            for message in r.listen():
+            self.pubsub.subscribe(channel)
+            for message in self.pubsub.listen():
                 if message.get('type') != 'message':
                     continue
 
@@ -74,3 +74,10 @@ class RedisListener(Greenlet):
                 self.logger.debug('--- %s --- handled' % message_type)
         except Exception, err:
             self.logger.info('RedisListener exception: %s' % str(err))
+
+        self.logger.info('RedisListener thread is over')
+
+    def join(self, timeout=None):
+        self.pubsub.unsubscribe(self.REDIS_LISTEN_CHANNEL)
+        super(RedisListener, self).join(timeout)
+
