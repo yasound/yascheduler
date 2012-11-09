@@ -308,10 +308,12 @@ class RadioScheduler():
             return
         song_id = event.get('song_id', None)
         show_id = event.get('show_id', None)
+        song_duration = event.get('track_duration', 0)
 
         radio_state = self.radio_state_manager.radio_state(radio_uuid)
         radio_state.song_id = song_id
         radio_state.play_time = self.current_step_time
+        radio_state.song_end_time = song_duration
         if show_id is None:
             radio_state.show_id = None
             radio_state.show_time = None
@@ -406,6 +408,7 @@ class RadioScheduler():
             self.logger.debug('prepare_track ERROR: cannot get next track')
             return None
         track_filename = track.filename
+        track_duration = track.duration
         offset = 0
 
         # 2 store 'track start' event
@@ -414,6 +417,7 @@ class RadioScheduler():
                 'date': self.current_step_time + timedelta(seconds=delay_before_play),
                 'radio_uuid': radio_uuid,
                 'filename': track_filename,
+                'track_duration': track_duration
         }
         if track.is_song:
             event['song_id'] = track.song_id  # add the song id in the event if the track is a song
@@ -547,8 +551,9 @@ class RadioScheduler():
             master_streamer = radio_state.master_streamer
             message = self.publisher.send_radio_exists_message(radio_uuid, streamer, master_streamer)
 
-        # #FIXME: to check...
-        if self.radio_events.find({'radio_uuid': radio_uuid, 'type': self.EVENT_TYPE_NEW_TRACK_PREPARE}).count() == 0:
+        # if radio's programming is broken
+        # ie current song has been played and no next song has been programmed
+        if radio_state.song_end_time < datetime.now():
             self.prepare_track(radio_uuid, 0, 0)
         return message
 
@@ -778,12 +783,10 @@ class RadioScheduler():
         self.radio_events.insert(event, safe=True)
 
     def check_programming(self):
-        self.logger.info('### check radios programming: verify that every radio will receive "prepare track" event in the furute')
-        scheduler_radio_uuids = self.radio_state_manager.radio_states.find().distinct('radio_uuid')
-        for uuid in scheduler_radio_uuids:
-            event_count = self.radio_events.find({'type': self.EVENT_TYPE_NEW_TRACK_PREPARE, 'radio_uuid': uuid}).count()
-            if event_count == 0:
-                self.logger.info('!!!!! radio %s: programming broken' % uuid)
+        self.logger.info('### check radios programming: verify that current song end time is not over for every radio')
+        for doc in self.radio_state_manager.broken_radios():
+            radio_uuid = doc['radio_uuid']
+            self.logger.info('!!!!! radio %s: programming broken' % radio_uuid)
         self.logger.info('### check radios programming: DONE')
 
     def check_existing_radios(self):
