@@ -4,6 +4,7 @@ import settings
 import requests
 import json
 from logger import Logger
+from datetime import datetime
 
 
 class CurrentSongManager(Thread):
@@ -54,5 +55,5 @@ class CurrentSongManager(Thread):
         except Exception, e:
             self.logger.info('CurrentSongManager report exception: %s' % str(e))
 
-    def store(self, radio_uuid, song_id):
-        self.current_songs.append([radio_uuid, song_id])
+    def store(self, radio_uuid, song_id, play_date=datetime.now()):
+        self.current_songs.append([radio_uuid, song_id, play_date.isoformat()])
