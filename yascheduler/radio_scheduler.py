@@ -797,6 +797,7 @@ class RadioScheduler():
 
         for uuid in to_remove:
             self.radio_state_manager.remove(uuid)
+            self.clean_radio_events(uuid)
 
         # uuids to add to radio states (new radios)
         to_add = db_radio_uuids.difference(scheduler_radio_uuids)
