@@ -11,15 +11,17 @@ from track import Track
 import random
 import time
 
+import gevent
+from gevent import Greenlet
 
-class PlaylistBuilder(Thread):
+class PlaylistBuilder(Greenlet):
 
     SONG_COUNT_TO_PREPARE = 50
     MIN_SONG_COUNT = 3
     CHECK_PLAYLIST_PERIOD = 10 * 60
 
     def __init__(self):
-        Thread.__init__(self)
+        Greenlet.__init__(self)
 
         self.logger = Logger().log
 
@@ -51,7 +53,7 @@ class PlaylistBuilder(Thread):
         self.quit.set()
         super(PlaylistBuilder, self).join(timeout)
 
-    def run(self):
+    def _run(self):
         last_check_playlist_date = None
         while not self.quit.is_set():
             self.logger.debug('PlaylistBuilder.....')
@@ -70,7 +72,7 @@ class PlaylistBuilder(Thread):
                 self.update_songs(doc)
 
             # 3 - sleep
-            time.sleep(1)
+            gevent.sleep(1)
 
     def playlist_count(self):
         return self.playlist_collection.count()

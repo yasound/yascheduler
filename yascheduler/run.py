@@ -38,4 +38,5 @@ if __name__ == "__main__":
     if flush:
         scheduler.flush()
     else:
-        scheduler.run()
+        scheduler.start()
+        scheduler.join()

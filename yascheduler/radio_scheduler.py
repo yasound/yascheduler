@@ -17,8 +17,9 @@ from sqlalchemy.orm import sessionmaker
 from playlist_manager import PlaylistManager
 from current_song_manager import CurrentSongManager
 import gevent
+from gevent import Greenlet
 
-class RadioScheduler():
+class RadioScheduler(Greenlet):
     EVENT_TYPE_NEW_HOUR_PREPARE = 'prepare_new_hour'
     EVENT_TYPE_NEW_TRACK_PREPARE = 'prepare_new_track'
     EVENT_TYPE_NEW_TRACK_START = 'start_new_track'
@@ -37,6 +38,7 @@ class RadioScheduler():
     CHECK_PROGRAMMING_PERIOD = 30
 
     def __init__(self, enable_ping_streamers=True, enable_programming_check=False, enable_time_profiling=False):
+        Greenlet.__init__(self)
         self.current_step_time = datetime.now()
         self.last_step_time = self.current_step_time
 
@@ -93,7 +95,7 @@ class RadioScheduler():
         self.current_song_manager.flush()
         self.logger.debug('flushed')
 
-    def run(self):
+    def _run(self):
         self.last_step_time = datetime.now()
 
         # starts thread to listen to redis events
@@ -189,7 +191,7 @@ class RadioScheduler():
                 self.logger.info('main loop: process = %s seconds / wait = %s seconds (%s%%)' % (elapsed_sec, seconds_to_wait, percent))
 
             # waits until next event
-            time.sleep(seconds_to_wait)
+            gevent.sleep(seconds_to_wait)
 
         self.logger.info('radio scheduler main loop is over')
         self.streamer_checker.join()

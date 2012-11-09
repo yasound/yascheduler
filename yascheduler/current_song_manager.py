@@ -5,12 +5,14 @@ import requests
 import json
 from logger import Logger
 from datetime import datetime
+import gevent
+from gevent import Greenlet
 
 
-class CurrentSongManager(Thread):
+class CurrentSongManager(Greenlet):
 
     def __init__(self):
-        Thread.__init__(self)
+        Greenlet.__init__(self)
 
         self.quit = Event()
         self.WAIT_TIME = 2
@@ -25,12 +27,12 @@ class CurrentSongManager(Thread):
         self.quit.set()
         super(CurrentSongManager, self).join(timeout)
 
-    def run(self):
+    def _run(self):
         while not self.quit.is_set():
             self.report()
 
             # sleep
-            time.sleep(self.WAIT_TIME)
+            gevent.sleep(self.WAIT_TIME)
 
     def report(self):
         if len(self.current_songs) == 0:
