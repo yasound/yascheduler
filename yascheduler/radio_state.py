@@ -20,13 +20,13 @@ class RadioStateManager():
         return radio_state
 
     def count(self, radio_uuid):
-        count = self.radio_states.find({'radio_uuid': radio_uuid}).count()
+        count = self.radio_states.find({'radio_uuid': radio_uuid}, fields={'radio_uuid': True}).count()
         return count
 
     def remove(self, radio_uuid):
-        count = self.count(radio_uuid)
-        if count == 0:
-            return False
+        # count = self.count(radio_uuid)
+        # if count == 0:
+        #     return False
         self.radio_states.remove({'radio_uuid': radio_uuid})
         return True
 
