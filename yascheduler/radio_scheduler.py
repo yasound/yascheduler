@@ -635,6 +635,7 @@ class RadioScheduler():
         streamer = data.get('streamer', None)
         if streamer is None:
             return
+        self.unregister_streamer(streamer)
         self.register_streamer(streamer)
 
     def receive_unregister_streamer_message(self, data):

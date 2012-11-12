@@ -39,7 +39,8 @@ class RadioStateManager():
         self.radio_states.insert(doc, safe=True)
 
     def exists(self, radio_uuid):
-        return self.count(radio_uuid) > 0
+        doc = self.radio_states.find_one({'radio_uuid': radio_uuid})
+        return doc != None
 
     def radio_uuids_for_master_streamer(self, master_streamer):
         return self.radio_states.find({'master_streamer': master_streamer}).distinct('radio_uuid')
