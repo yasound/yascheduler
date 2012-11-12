@@ -109,26 +109,30 @@ class RadioScheduler():
         self.check_existing_radios()
 
         # prepare track for radios with no event in the future (events which should have occured when the scheduler was off and which have been cured)
-        for radio_state_doc in self.radio_state_manager.radio_states.find():
+        self.logger.info('preparing tracks')
+        self.logger.info('radio_events.count() = %d' % (self.radio_events.find().count()))
+        events = frozenset([doc.get('radio_uuid') for doc in self.radio_events.find(fields={'radio_uuid': True})])
+        for radio_state_doc in self.radio_state_manager.radio_states.find(fields={'radio_uuid': True}):
             radio_uuid = radio_state_doc.get('radio_uuid', None)
             if radio_uuid is None:
                 continue
-            event_count = self.radio_events.find({'radio_uuid': radio_uuid}).count()
+
             # if there are events for this radio, next track will be computed later
             # else, prepare a new track now
-            if event_count == 0:
+            if radio_uuid not in events:
                 delay_before_play = 0
                 crossfade_duration = 0
                 self.prepare_track(radio_uuid, delay_before_play, crossfade_duration)
+        self.logger.info('preparing tracks: DONE')
 
         # add the event for the next hour if it does not exist yet
-        hour_event_count = self.radio_events.find({'type': self.EVENT_TYPE_NEW_HOUR_PREPARE}).count()
-        if hour_event_count == 0:
+        hour_event = self.radio_events.find_one({'type': self.EVENT_TYPE_NEW_HOUR_PREPARE}, fields={'type': True})
+        if hour_event is None:
             self.add_next_hour_event()
 
         # add the event to check the existing radios if it does not exist yet
-        check_event_count = self.radio_events.find({'type': self.EVENT_TYPE_CHECK_EXISTING_RADIOS}).count()
-        if check_event_count == 0:
+        check_event = self.radio_events.find_one({'type': self.EVENT_TYPE_CHECK_EXISTING_RADIOS}, fields={'type': True})
+        if check_event == 0:
             self.add_next_check_radios_event(self.CHECK_EXISTING_RADIOS_PERIOD)
 
         # add the event to check if there is no problem with radios' programming
@@ -405,7 +409,7 @@ class RadioScheduler():
         # #
 
         if track is None:
-            self.logger.debug('prepare_track ERROR: cannot get next track')
+            # self.logger.debug('prepare_track ERROR: cannot get next track')
             return None
         track_filename = track.filename
         track_duration = track.duration
