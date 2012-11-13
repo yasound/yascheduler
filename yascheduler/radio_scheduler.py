@@ -307,7 +307,7 @@ class RadioScheduler():
         radio_state = self.radio_state_manager.radio_state(radio_uuid)
         radio_state.song_id = song_id
         radio_state.play_time = self.current_step_time
-        radio_state.song_end_time = song_duration
+        radio_state.song_end_time = radio_state.play_time + timedelta(seconds=song_duration)
         if show_id is None:
             radio_state.show_id = None
             radio_state.show_time = None
@@ -509,7 +509,7 @@ class RadioScheduler():
 
         # if radio's programming is broken
         # ie current song has been played and no next song has been programmed
-        if radio_state.song_end_time < datetime.now():
+        if radio_state.song_end_time is None or radio_state.song_end_time < datetime.now():
             self.prepare_track(radio_uuid, 0, 0)
         return message
 
