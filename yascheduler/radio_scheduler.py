@@ -159,13 +159,13 @@ class RadioScheduler():
             # remove events from list
             self.radio_events.remove(events_query)
 
-            # find next event
-            next_events = self.radio_events.find({'date': {'$gt': self.current_step_time}}).sort([('date', ASCENDING)]).limit(1)
-            next_event = None
-            if next_events is not None and next_events.count() >= 1:
+            # compute time to wait till next event
+            next_events = self.radio_events.find({'date': {'$gt': self.current_step_time}}, {'date': True}).sort([('date', ASCENDING)]).limit(1)
+            next_events_count = next_events.count()
+            if next_events is not None and next_events_count >= 1:
                 next_event = next_events[0]
-            # else:
-            #     self.logger.debug('next events: %s' % next_events)
+            else:
+                next_event = None
 
             # compute seconds to wait until next event
             seconds_to_wait = self.DEFAULT_SECONDS_TO_WAIT
@@ -174,14 +174,15 @@ class RadioScheduler():
                 diff_timedelta = next_date - datetime.now()
                 seconds_to_wait = diff_timedelta.days * 86400 + diff_timedelta.seconds + diff_timedelta.microseconds / 1000000.0
                 seconds_to_wait = max(seconds_to_wait, 0)
-                if self.enable_time_profiling:
+
+            if self.enable_time_profiling:
                     self.logger.debug('....... %d events handled' % event_count)
                     if seconds_to_wait == 0:
                         self.logger.debug('....... need to process next events NOW !!!')
                     else:
                         self.logger.debug('....... wait for %s seconds' % seconds_to_wait)
 
-            # store date for next step
+            # store next step date
             self.last_step_time = self.current_step_time
 
             if self.enable_time_profiling:
