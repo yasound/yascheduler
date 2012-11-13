@@ -533,7 +533,7 @@ class RadioScheduler():
 
         # if radio's programming is broken
         # ie current song has been played and no next song has been programmed
-        if radio_state.song_end_time is None or radio_state.song_end_time < datetime.now():
+        if radio_state.song_end_time != None and radio_state.song_end_time < datetime.now():
             self.prepare_track(radio_uuid, 0, 0)
         return message
 
