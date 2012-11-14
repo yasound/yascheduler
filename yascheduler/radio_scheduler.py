@@ -5,7 +5,7 @@ from models.yasound_alchemy_models import YasoundSong
 from models.account_alchemy_models import User
 from datetime import datetime, timedelta, date
 import time
-from pymongo import ASCENDING, DESCENDING
+from pymongo import DESCENDING
 import requests
 from streamer_checker import StreamerChecker
 from redis_listener import RedisListener
@@ -17,6 +17,7 @@ from sqlalchemy.orm import sessionmaker
 from playlist_manager import PlaylistManager
 from current_song_manager import CurrentSongManager
 from time_event_manager import TimeEventManager
+from radio_history import TransientRadioHistoryManager
 
 
 class RadioScheduler():
@@ -27,7 +28,6 @@ class RadioScheduler():
 
     SONG_PREPARE_DURATION = 5  # seconds
     CROSSFADE_DURATION = 1  # seconds
-    CHECK_EXISTING_RADIOS_PERIOD = 10 * 60
     CHECK_PROGRAMMING_PERIOD = 30
 
     def __init__(self, enable_ping_streamers=True, enable_programming_check=False, enable_time_profiling=False):
@@ -65,6 +65,7 @@ class RadioScheduler():
         self.playlist_manager = PlaylistManager()
         self.current_song_manager = CurrentSongManager()
         self.event_manager = TimeEventManager()
+        self.history_manager = TransientRadioHistoryManager(self.handle_radio_history_event)
 
         # remove past events (those which sould have occured when the scheduler was off)
         self.cure_radio_events()
@@ -96,9 +97,6 @@ class RadioScheduler():
         if self.enable_ping_streamers:
             self.streamer_checker.start()
 
-        # check existing radios
-        self.check_existing_radios()
-
         # prepare track for radios with no event in the future (events which should have occured when the scheduler was off and which have been cured)
         self.logger.info('preparing tracks')
         self.logger.info('radio_events.count() = %d' % (self.event_manager.count()))
@@ -119,10 +117,6 @@ class RadioScheduler():
         # add the event for the next hour if it does not exist yet
         if self.event_manager.contains_event_type(TimeEventManager.EVENT_TYPE_NEW_HOUR_PREPARE) == False:
             self.add_next_hour_event()
-
-        # add the event to check the existing radios if it does not exist yet
-        if self.event_manager.contains_event_type(TimeEventManager.EVENT_TYPE_CHECK_EXISTING_RADIOS) == False:
-            self.add_next_check_radios_event(self.CHECK_EXISTING_RADIOS_PERIOD)
 
         # add the event to check if there is no problem with radios' programming
         if self.enable_programming_check:
@@ -190,8 +184,6 @@ class RadioScheduler():
             self.handle_new_track_prepare(event)
         elif event_type == TimeEventManager.EVENT_TYPE_TRACK_CONTINUE:
             self.handle_track_continue(event)
-        elif event_type == TimeEventManager.EVENT_TYPE_CHECK_EXISTING_RADIOS:
-            self.handle_check_existing_radios(event)
         elif event_type == TimeEventManager.EVENT_TYPE_CHECK_PROGRAMMING:
             self.handle_check_programming(event)
         else:
@@ -206,11 +198,6 @@ class RadioScheduler():
         self.check_programming()
         # add next check event
         self.add_next_check_programming_event(self.CHECK_PROGRAMMING_PERIOD)
-
-    def handle_check_existing_radios(self, event):
-        self.check_existing_radios()
-        # add next check event
-        self.add_next_check_radios_event(self.CHECK_EXISTING_RADIOS_PERIOD)
 
     def handle_new_hour_prepare(self, event):
         self.logger.info('prepare new hour %s' % datetime.now().time().isoformat())
@@ -747,14 +734,6 @@ class RadioScheduler():
                 }
         self.event_manager.insert(event)
 
-    def add_next_check_radios_event(self, seconds):
-        date = datetime.now() + timedelta(seconds=seconds)
-        event = {
-                    'type': TimeEventManager.EVENT_TYPE_CHECK_EXISTING_RADIOS,
-                    'date': date
-                }
-        self.event_manager.insert(event)
-
     def add_next_check_programming_event(self, seconds):
         date = datetime.now() + timedelta(seconds=seconds)
         event = {
@@ -770,26 +749,14 @@ class RadioScheduler():
             self.logger.info('!!!!! radio %s: programming broken' % radio_uuid)
         self.logger.info('### check radios programming: DONE')
 
-    def check_existing_radios(self):
-        self.logger.debug('*** check existing radios: add new radios and remove deleted radios')
-        scheduler_radio_uuids = set(self.radio_state_manager.radio_states.find().distinct('radio_uuid'))
-        radios = self.yaapp_alchemy_session.query(Radio).filter(Radio.ready == True, Radio.origin == 0)  # origin == 0 is for radios created in yasound
-        db_radio_uuids = set([r.uuid for r in radios])
-
-        # uuids to remove from radio states (radio not ready anymore)
-        to_remove = scheduler_radio_uuids.difference(db_radio_uuids)
-
-        for uuid in to_remove:
-            self.radio_state_manager.remove(uuid)
-            self.clean_radio_events(uuid)
-
-        # uuids to add to radio states (new radios)
-        to_add = db_radio_uuids.difference(scheduler_radio_uuids)
-
-        for uuid in to_add:
-            self.start_radio(uuid)
-
-        self.logger.debug('*** check existing radios: DONE')
+    def handle_radio_history_event(self, event_type, radio_uuid):
+        if event_type == TransientRadioHistoryManager.TYPE_RADIO_ADDED:
+            self.logger.info('radio %s created' % radio_uuid)
+            self.start_radio(radio_uuid)
+        elif event_type == TransientRadioHistoryManager.TYPE_RADIO_DELETED:
+            self.logger.info('radio %s deleted' % radio_uuid)
+            self.radio_state_manager.remove(radio_uuid)
+            self.clean_radio_events(radio_uuid)
 
     def clean_radio_events(self, radio_uuid):
         self.event_manager.remove_radio_events(radio_uuid)

@@ -8,7 +8,6 @@ class TimeEventManager():
     EVENT_TYPE_NEW_TRACK_PREPARE = 'prepare_new_track'
     EVENT_TYPE_NEW_TRACK_START = 'start_new_track'
     EVENT_TYPE_TRACK_CONTINUE = 'continue_track'
-    EVENT_TYPE_CHECK_EXISTING_RADIOS = 'check_existing_radios'
     EVENT_TYPE_CHECK_PROGRAMMING = 'check_programming'
 
     def __init__(self):
