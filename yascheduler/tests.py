@@ -210,25 +210,16 @@ class TestRadioState(TestCase):
         self.assertEqual(self.manager.count(radio_uuid), 0)
 
 
-class TestExistingRadiosCheck(TestCase):
-    def setUp(self):
-        self.scheduler = RadioScheduler()
-        self.yaapp_session = self.scheduler.yaapp_alchemy_session
-        self.yasound_session = self.scheduler.yasound_alchemy_session
-        clean_db(self.yaapp_session, self.yasound_session)
-        self.scheduler.flush()
-
-
 class TestPlaylistManager(TestCase):
     def setUp(self):
-        self.manager = PlaylistManager(start_builder_thread=False)
+        self.manager = PlaylistManager()
         self.manager.builder.clear_data()
 
         self.yaapp_session = self.manager.builder.yaapp_alchemy_session
         self.yasound_session = self.manager.builder.yasound_alchemy_session
         clean_db(self.yaapp_session, self.yasound_session)
 
-    def test_check_playlists(self):
+    def test_set_playlists(self):
         radio_uuid1 = 'uuid1'
         r1 = Radio('mat radio 1', radio_uuid1)
         r1.ready = True
@@ -241,29 +232,19 @@ class TestPlaylistManager(TestCase):
         self.yaapp_session.add(r2)
         r2 = self.yaapp_session.query(Radio).filter(Radio.uuid == radio_uuid2).first()
 
-        radio_uuid3 = 'uuid3'
-        r3 = Radio('mat radio 3', radio_uuid3)
-        r3.ready = False
-        self.yaapp_session.add(r3)
-        r3 = self.yaapp_session.query(Radio).filter(Radio.uuid == radio_uuid3).first()
-
         p1_default = Playlist('default', r1)
         self.yaapp_session.add(p1_default)
+        p1_default = self.yaapp_session.query(Playlist).filter(Playlist.radio_id == r1.id, Playlist.name == 'default').first()
 
         p2_default = Playlist('default', r2)
         self.yaapp_session.add(p2_default)
-
-        p3_default = Playlist('default', r3)
-        self.yaapp_session.add(p3_default)
-
-        self.assertEqual(self.yaapp_session.query(Radio).count(), 3)
-        self.assertEqual(self.yaapp_session.query(Playlist).count(), 3)
-
-        self.assertEqual(self.manager.builder.playlist_count(), 0)
-        self.manager.builder.check_playlists()
-        self.assertEqual(self.manager.builder.playlist_count(), 2)  # 3 radios, but only 2 ready ones
+        p2_default = self.yaapp_session.query(Playlist).filter(Playlist.radio_id == r2.id, Playlist.name == 'default').first()
 
         self.yaapp_session.commit()
+
+        self.assertEqual(0, self.manager.builder.playlist_count())
+        self.manager.builder.set_playlists()
+        self.assertEqual(2, self.manager.builder.playlist_count())
 
     def test_songs(self):
         radio_uuid = 'uuid'
@@ -300,7 +281,7 @@ class TestPlaylistManager(TestCase):
             self.yaapp_session.add(song)
 
         self.assertEqual(self.manager.builder.playlist_count(), 0)
-        self.manager.builder.check_playlists()
+        self.manager.handle_playlist_history_event(TransientRadioHistoryManager.TYPE_PLAYLIST_ADDED, p.id)
         self.assertEqual(self.manager.builder.playlist_count(), 1)
 
         # test song processing
@@ -326,24 +307,28 @@ class TestPlaylistManager(TestCase):
 class TestRadioHistoryManager(TestCase):
 
     class EventHandler():
-        def __init__(self):
-            self.radio_events = []
-            self.playlist_events = []
+            def __init__(self):
+                self.radio_events = []
+                self.playlist_events = []
 
-        def handle_radio_event(self, event_type, radio_uuid):
-            self.radio_events.append((event_type, radio_uuid))
+            def handle_radio_event(self, event_type, radio_uuid):
+                self.radio_events.append((event_type, radio_uuid))
 
-        def handle_playlist_event(self, event_type, playlist_id):
-            self.playlist_events.append((event_type, playlist_id))
+            def handle_playlist_event(self, event_type, playlist_id):
+                self.playlist_events.append((event_type, playlist_id))
 
     def setUp(self):
-        self.event_handler = self.EventHandler()
-
-        self.manager = TransientRadioHistoryManager(self.event_handler.handle_radio_event, self.event_handler.handle_playlist_event)
-        self.manager.collection.remove()
+        self.scheduler = RadioScheduler()
+        self.scheduler.flush()
+        self.yaapp_session = self.scheduler.yaapp_alchemy_session
+        self.yasound_session = self.scheduler.yasound_alchemy_session
+        clean_db(self.yaapp_session, self.yasound_session)
 
     def test_event_handling(self):
-        self.assertEqual(0, self.manager.collection.count())
+        event_handler = self.EventHandler()
+        manager = TransientRadioHistoryManager(event_handler.handle_radio_event, event_handler.handle_playlist_event)
+        manager.collection.remove()
+        self.assertEqual(0, manager.collection.count())
 
         # create test events
         radio_event_count = 5
@@ -356,7 +341,7 @@ class TestRadioHistoryManager(TestCase):
                 'playlist_id': None,
                 'type': TransientRadioHistoryManager.TYPE_RADIO_ADDED
             }
-            self.manager.collection.insert(doc)
+            manager.collection.insert(doc)
 
         playlist_event_count = 5
         for i in range(playlist_event_count):
@@ -368,22 +353,60 @@ class TestRadioHistoryManager(TestCase):
                 'playlist_id': i,
                 'type': TransientRadioHistoryManager.TYPE_PLAYLIST_ADDED
             }
-            self.manager.collection.insert(doc)
+            manager.collection.insert(doc)
 
-        self.assertEqual(radio_event_count + playlist_event_count, self.manager.collection.count())
+        self.assertEqual(radio_event_count + playlist_event_count, manager.collection.count())
 
-        self.manager.handle_events()
-        self.assertEqual(0, self.manager.collection.count())
+        manager.handle_events()
+        self.assertEqual(0, manager.collection.count())
 
-        self.assertEqual(radio_event_count, len(self.event_handler.radio_events))
-        self.assertEqual(playlist_event_count, len(self.event_handler.playlist_events))
+        self.assertEqual(radio_event_count, len(event_handler.radio_events))
+        self.assertEqual(playlist_event_count, len(event_handler.playlist_events))
 
     def test_scheduler_integration(self):
-        self.scheduler = RadioScheduler()
-        self.scheduler.flush()
-        self.yaapp_session = self.scheduler.yaapp_alchemy_session
-        self.yasound_session = self.scheduler.yasound_alchemy_session
+        # add objects
+        radio_uuid1 = 'uuid1'
+        r1 = Radio('mat radio 1', radio_uuid1)
+        r1.ready = True
+        self.yaapp_session.add(r1)
+        r1 = self.yaapp_session.query(Radio).filter(Radio.uuid == radio_uuid1).first()
 
+        radio_uuid2 = 'uuid2'
+        r2 = Radio('mat radio 2', radio_uuid2)
+        r2.ready = True
+        self.yaapp_session.add(r2)
+        r2 = self.yaapp_session.query(Radio).filter(Radio.uuid == radio_uuid2).first()
+
+        self.yaapp_session.commit()
+
+        # store history events (which should have been stored by yaapp in the real configuration)
+        now = datetime.now()
+        doc = {
+            'created': now,
+            'updated': now,
+            'radio_uuid': radio_uuid1,
+            'playlist_id': None,
+            'type': TransientRadioHistoryManager.TYPE_RADIO_ADDED
+        }
+        self.scheduler.history_manager.collection.insert(doc)
+
+        now = datetime.now()
+        doc = {
+            'created': now,
+            'updated': now,
+            'radio_uuid': radio_uuid2,
+            'playlist_id': None,
+            'type': TransientRadioHistoryManager.TYPE_RADIO_ADDED
+        }
+        self.scheduler.history_manager.collection.insert(doc)
+
+        self.assertEqual(self.scheduler.radio_state_manager.radio_states.find().count(), 0)
+        self.scheduler.history_manager.handle_events()
+        self.assertEqual(self.scheduler.radio_state_manager.radio_states.find().count(), 2)
+
+        self.yaapp_session.commit()
+
+    def test_playlist_manager_integration(self):
         # add objects
         radio_uuid1 = 'uuid1'
         r1 = Radio('mat radio 1', radio_uuid1)
@@ -448,8 +471,8 @@ class TestRadioHistoryManager(TestCase):
         }
         self.scheduler.history_manager.collection.insert(doc)
 
-        self.assertEqual(self.scheduler.radio_state_manager.radio_states.find().count(), 0)
+        self.assertEqual(self.scheduler.playlist_manager.builder.playlist_count(), 0)
         self.scheduler.history_manager.handle_events()
-        self.assertEqual(self.scheduler.radio_state_manager.radio_states.find().count(), 2)
+        self.assertEqual(self.scheduler.playlist_manager.builder.playlist_count(), 2)
 
         self.yaapp_session.commit()

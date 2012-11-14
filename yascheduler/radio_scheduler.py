@@ -65,7 +65,7 @@ class RadioScheduler():
         self.playlist_manager = PlaylistManager()
         self.current_song_manager = CurrentSongManager()
         self.event_manager = TimeEventManager()
-        self.history_manager = TransientRadioHistoryManager(self.handle_radio_history_event)
+        self.history_manager = TransientRadioHistoryManager(self.handle_radio_history_event, self.playlist_manager.handle_playlist_history_event)
 
         # remove past events (those which sould have occured when the scheduler was off)
         self.cure_radio_events()
