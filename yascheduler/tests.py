@@ -374,16 +374,42 @@ class TestPlaylistManager(TestCase):
 
 
 class TestRadioHistoryManager(TestCase):
+
+    class EventHandler():
+        def __init__(self):
+            self.radio_events = []
+            self.playlist_events = []
+
+        def handle_radio_event(self, event_type, radio_uuid):
+            self.radio_events.append((event_type, radio_uuid))
+
+        def handle_playlist_event(self, event_type, playlist_id):
+            self.playlist_events.append((event_type, playlist_id))
+
     def setUp(self):
-        self.manager = TransientRadioHistoryManager()
+        self.event_handler = self.EventHandler()
+
+        self.manager = TransientRadioHistoryManager(self.event_handler.handle_radio_event, self.event_handler.handle_playlist_event)
         self.manager.collection.remove()
 
     def test_event_handling(self):
         self.assertEqual(0, self.manager.collection.count())
 
         # create test events
-        count = 5
-        for i in range(count):
+        radio_event_count = 5
+        for i in range(radio_event_count):
+            now = datetime.now()
+            doc = {
+                'created': now,
+                'updated': now,
+                'radio_uuid': 'radio-%d' % i,
+                'playlist_id': None,
+                'type': TransientRadioHistoryManager.TYPE_RADIO_ADDED
+            }
+            self.manager.collection.insert(doc)
+
+        playlist_event_count = 5
+        for i in range(playlist_event_count):
             now = datetime.now()
             doc = {
                 'created': now,
@@ -393,8 +419,11 @@ class TestRadioHistoryManager(TestCase):
                 'type': TransientRadioHistoryManager.TYPE_PLAYLIST_ADDED
             }
             self.manager.collection.insert(doc)
-        self.assertEqual(count, self.manager.collection.count())
+
+        self.assertEqual(radio_event_count + playlist_event_count, self.manager.collection.count())
 
         self.manager.handle_events()
         self.assertEqual(0, self.manager.collection.count())
 
+        self.assertEqual(radio_event_count, len(self.event_handler.radio_events))
+        self.assertEqual(playlist_event_count, len(self.event_handler.playlist_events))

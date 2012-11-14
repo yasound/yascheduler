@@ -1,11 +1,11 @@
 from threading import Thread
 import settings
 import redis
-import time
 import json
 from logger import Logger
 from sqlalchemy.orm import scoped_session
 from sqlalchemy.orm import sessionmaker
+
 
 class RedisListener(Thread):
     WAIT_TIME = 0.020  # seconds
@@ -78,4 +78,3 @@ class RedisListener(Thread):
     def join(self, timeout=None):
         self.pubsub.unsubscribe(self.REDIS_LISTEN_CHANNEL)
         super(RedisListener, self).join(timeout)
-

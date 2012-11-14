@@ -7,7 +7,11 @@ from logger import Logger
 
 logger = Logger().log
 
+
 class RadioHistoryEventChecker(Thread):
+    """
+    thread which regularly handle events
+    """
     WAIT_TIME = 60  # seconds
 
     def __init__(self, manager):
@@ -28,6 +32,9 @@ class RadioHistoryEventChecker(Thread):
 
 
 class RadioHistoryRedisListener(Thread):
+    """
+    listens to redis messages from yaapp to handle new events
+    """
     REDIS_DB = 0
     REDIS_CHANNEL = 'yaapp'
 
@@ -51,6 +58,10 @@ class RadioHistoryRedisListener(Thread):
 
 
 class TransientRadioHistoryManager():
+    """
+    Gets events from yaapp when there are radio/playlist modifications
+    and notifies yascheduler
+    """
     TYPE_PLAYLIST_ADDED = 'playlist_added'
     TYPE_PLAYLIST_UPDATED = 'playlist_updated'
     TYPE_PLAYLIST_DELETED = 'playlist_deleted'
@@ -69,7 +80,10 @@ class TransientRadioHistoryManager():
         TYPE_RADIO_DELETED
         )
 
-    def __init__(self):
+    def __init__(self, radio_event_handler=None, playlist_event_handler=None):
+        self.radio_event_handler = radio_event_handler
+        self.playlist_event_handler = playlist_event_handler
+
         self.db = settings.MONGO_DB
         self.collection = self.db.scheduler.transient.radios
 
@@ -105,11 +119,11 @@ class TransientRadioHistoryManager():
             self.handle_playlist_event(event_type, playlist_id)
 
     def handle_radio_event(self, event_type, radio_uuid):
-        #TODO
         logger.info('TransientRadioHistoryManager: %s - %s' % (event_type, radio_uuid))
-        pass
+        if self.radio_event_handler:
+            self.radio_event_handler(event_type, radio_uuid)
 
     def handle_playlist_event(self, event_type, playlist_id):
-        #TODO
         logger.info('TransientRadioHistoryManager: %s - %s' % (event_type, playlist_id))
-        pass
+        if self.playlist_event_handler:
+            self.playlist_event_handler(event_type, playlist_id)
