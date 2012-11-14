@@ -1,34 +1,54 @@
 import settings
 from pymongo import ASCENDING
-# import time
-# from threading import Thread, Event
+import time
+from threading import Thread, Event, Lock
+import redis
+from logger import Logger
+
+logger = Logger().log
+
+class RadioHistoryEventChecker(Thread):
+    WAIT_TIME = 60  # seconds
+
+    def __init__(self, manager):
+        Thread.__init__(self)
+        self.manager = manager
+        self.quit = Event()
+
+    def run(self):
+        while not self.quit.is_set():
+            self.manager.handle_events()
+
+            # sleep
+            time.sleep(self.WAIT_TIME)
+
+    def join(self, timeout=None):
+        self.quit.set()
+        super(RadioHistoryEventChecker, self).join(timeout)
 
 
-# class StreamerChecker(Thread):
-#     WAIT_TIME = 15  # seconds
+class RadioHistoryRedisListener(Thread):
+    REDIS_DB = 0
+    REDIS_CHANNEL = 'yaapp'
 
-#     def __init__(self, radio_scheduler):
-#         Thread.__init__(self)
-#         self.radio_scheduler = radio_scheduler
-#         self.quit = Event()
+    def __init__(self, manager):
+        Thread.__init__(self)
+        self.manager = manager
 
-#     def run(self):
-#         while not self.quit.is_set():
-#             # unregister dead streamers (those who haven't answered to ping message)
-#             dead_streamers = self.radio_scheduler.streamers.find({'ping_status': self.radio_scheduler.STREAMER_PING_STATUS_WAITING})
-#             for dead in dead_streamers:
-#                 self.radio_scheduler.logger.info('unregister streamer %s, it seems to be dead', dead['name'])
-#                 self.radio_scheduler.unregister_streamer(dead['name'])
+    def run(self):
+        r = redis.StrictRedis(host=settings.REDIS_HOST, db=self.REDIS_DB)
+        self.pubsub = r.pubsub()
+        channel = self.REDIS_CHANNEL
+        self.pubsub.subscribe(channel)
+        for message in self.pubsub.listen():
+            if message.get('event_type') == 'radio_updated':
+                logger.info('RadioHistoryRedisListener: radio_updated received')
+                self.manager.handle_events()
 
-#             # ping all streamers
-#             self.radio_scheduler.ping_all_streamers()
+    def join(self, timeout=None):
+        self.pubsub.unsubscribe(self.REDIS_CHANNEL)
+        super(RadioHistoryRedisListener, self).join(timeout)
 
-#             # sleep
-#             time.sleep(self.WAIT_TIME)
-
-#     def join(self, timeout=None):
-#         self.quit.set()
-#         super(StreamerChecker, self).join(timeout)
 
 class TransientRadioHistoryManager():
     TYPE_PLAYLIST_ADDED = 'playlist_added'
@@ -53,12 +73,27 @@ class TransientRadioHistoryManager():
         self.db = settings.MONGO_DB
         self.collection = self.db.scheduler.transient.radios
 
+        self.lock = Lock()
+
+        self.checker = RadioHistoryEventChecker(self)
+        self.listener = RadioHistoryRedisListener(self)
+
+    def start(self):
+        self.checker.start()
+        self.listener.start()
+
+    def join(self, timeout=None):
+        self.checker.join(timeout)
+        self.listener.join(timeout)
+
     def handle_events(self):
+        self.lock.acquire()
         while True:
             doc = self.collection.find_and_modify({}, sort={'updated': ASCENDING}, remove=True)
             if doc == None:
                 break
             self.handle_event(doc)
+        self.lock.release()
 
     def handle_event(self, event_doc):
         event_type = event_doc['type']
@@ -70,7 +105,11 @@ class TransientRadioHistoryManager():
             self.handle_playlist_event(event_type, playlist_id)
 
     def handle_radio_event(self, event_type, radio_uuid):
+        #TODO
+        logger.info('TransientRadioHistoryManager: %s - %s' % (event_type, radio_uuid))
         pass
 
     def handle_playlist_event(self, event_type, playlist_id):
+        #TODO
+        logger.info('TransientRadioHistoryManager: %s - %s' % (event_type, playlist_id))
         pass
