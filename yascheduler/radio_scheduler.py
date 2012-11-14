@@ -97,6 +97,8 @@ class RadioScheduler():
         if self.enable_ping_streamers:
             self.streamer_checker.start()
 
+        self.history_manager.start()
+
         # prepare track for radios with no event in the future (events which should have occured when the scheduler was off and which have been cured)
         self.logger.info('preparing tracks')
         self.logger.info('radio_events.count() = %d' % (self.event_manager.count()))
@@ -164,6 +166,7 @@ class RadioScheduler():
             time.sleep(seconds_to_wait)
 
         self.logger.info('radio scheduler main loop is over')
+        self.history_manager.join()
         self.streamer_checker.join()
         self.redis_listener.join()
         self.playlist_manager.join_thread()
