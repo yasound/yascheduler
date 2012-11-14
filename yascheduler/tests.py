@@ -7,7 +7,9 @@ from models.account_alchemy_models import User, UserProfile, ApiKey
 from radio_scheduler import RadioScheduler
 import time
 from radio_state import RadioStateManager, RadioState
-from playlist_manager import PlaylistManager, PlaylistBuilder
+from playlist_manager import PlaylistManager
+from radio_history import TransientRadioHistoryManager
+from datetime import datetime
 
 def clean_db(yaapp_session, yasound_session):
     yaapp_session.query(Radio).delete()
@@ -23,6 +25,7 @@ def clean_db(yaapp_session, yasound_session):
 
     yasound_session.query(YasoundSong).delete()
     yasound_session.commit()
+
 
 class Test(TestCase):
 
@@ -203,12 +206,7 @@ class TestRadioState(TestCase):
         self.assertEqual(1, len(uuids))
         self.assertEqual(uuids[0], radio_uuid)
 
-        res = self.manager.remove('wrong_uuid')
-        self.assertFalse(res)
-
-        res = self.manager.remove(radio_uuid)
-        self.assertTrue(res)
-
+        self.manager.remove(radio_uuid)
         self.assertEqual(self.manager.count(radio_uuid), 0)
 
 
@@ -373,3 +371,30 @@ class TestPlaylistManager(TestCase):
 
         self.yaapp_session.commit()
         self.yasound_session.commit()
+
+
+class TestRadioHistoryManager(TestCase):
+    def setUp(self):
+        self.manager = TransientRadioHistoryManager()
+        self.manager.collection.remove()
+
+    def test_event_handling(self):
+        self.assertEqual(0, self.manager.collection.count())
+
+        # create test events
+        count = 5
+        for i in range(count):
+            now = datetime.now()
+            doc = {
+                'created': now,
+                'updated': now,
+                'radio_uuid': 'radio-%d' % i,
+                'playlist_id': i,
+                'type': TransientRadioHistoryManager.TYPE_PLAYLIST_ADDED
+            }
+            self.manager.collection.insert(doc)
+        self.assertEqual(count, self.manager.collection.count())
+
+        self.manager.handle_events()
+        self.assertEqual(0, self.manager.collection.count())
+
