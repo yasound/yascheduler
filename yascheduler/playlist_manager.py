@@ -52,24 +52,20 @@ class PlaylistBuilder(Thread):
         super(PlaylistBuilder, self).join(timeout)
 
     def run(self):
-        last_check_playlist_date = None
+        # if there is no playlist stored, insert all playlists from db
+        if self.playlist_collection.find_one() == None:  # empty
+            self.set_playlists()
+
         while not self.quit.is_set():
             self.logger.debug('PlaylistBuilder.....')
 
-            # 1 - create entries for new playlists
-            # and remove old ones
-            if last_check_playlist_date == None or (datetime.now() - last_check_playlist_date).seconds > self.CHECK_PLAYLIST_PERIOD:
-                self.logger.info('playlist manager check playlists')
-                self.check_playlists()
-                last_check_playlist_date = datetime.now()
-
-            # 2 - compute songs for playlists whose song queue contains less than x songs
+            # 1 - compute songs for playlists whose song queue contains less than x songs
             # it includes newly created playlists
-            docs = self.playlist_collection.find({'song_count': {'$lt': self.MIN_SONG_COUNT}})
+            docs = self.playlist_collection.find({'song_count': {'$lt': self.MIN_SONG_COUNT}, 'enabled': True})
             for doc in docs:
                 self.update_songs(doc)
 
-            # 3 - sleep
+            # 2 - sleep
             time.sleep(1)
 
     def playlist_count(self):
@@ -77,30 +73,26 @@ class PlaylistBuilder(Thread):
 
     def update_songs(self, playlist_doc):
         songs = self.build_songs(playlist_doc)
-
+        song_count = len(songs)
         playlist_doc['songs'] = songs
-        playlist_doc['song_count'] = len(songs)
+        playlist_doc['song_count'] = song_count
         playlist_doc['update_date'] = datetime.now()
+        if song_count == 0:
+            playlist_doc['enabled'] = False  # if we cannot build songs for this playlist, consider it as disabled until it's updated
         self.playlist_collection.update({'_id': playlist_doc['_id']}, playlist_doc)
 
     def build_songs(self, playlist_doc):
         playlist_id = playlist_doc['playlist_id']
         show_id = playlist_doc['show_id']
+        show_random_play = playlist_doc['show_random_play']
         songs = []
-        if show_id == None:
+        if show_id == None or show_random_play == True:
             songs = self.build_random_songs(playlist_id)
         else:
-            songs = self.build_show_songs(playlist_id, show_id)
+            songs = self.build_ordered_songs(playlist_id)
         return songs
 
-    def build_show_songs(self, playlist_id, show_id):
-        show = self.shows.find_one({'_id': show_id})
-        if show == None:
-            return self.build_random_songs(playlist_id)
-        random_play = show['random_play']
-        if random_play:
-            return self.build_random_songs(playlist_id)
-
+    def build_ordered_songs(self, playlist_id):
         # follow song order
         current_song_order = self.builder.yaapp_alchemy_session.query(SongInstance).filter(SongInstance.enabled == True, SongInstance.playlist_id == playlist_id).order_by(SongInstance.last_play_time).first().order
         next_songs = self.builder.yaapp_alchemy_session.query(SongInstance).filter(SongInstance.enabled == True, SongInstance.playlist_id == playlist_id, SongInstance.order > current_song_order).order_by(SongInstance.order)
@@ -186,62 +178,66 @@ class PlaylistBuilder(Thread):
             songs.append(song)
         return songs
 
-    def check_playlists(self):
-        """
-        be sure there is a document in playlist_collection for every radio default playlist and show playlist,
-        add the new ones,
-        remove those which no longer exist
-        """
-        ids = self.yaapp_alchemy_session.query(Playlist).join(Radio).filter(Radio.ready == True, Radio.origin == 0, Playlist.name == 'default').values(Playlist.id)
-        default_playlists = set([x[0] for x in ids])
-
-        show_playlists = set()
-        playlist_to_show = {}
-        shows = self.shows.find()
-        for s in shows:
-            show_id = s['_id']
-            playlist_id = s['playlist_id']
-            show_playlists.add(playlist_id)
-            playlist_to_show[playlist_id] = show_id
-
-        in_db = default_playlists.union(show_playlists)
-        in_collection = set(self.playlist_collection.find().distinct('playlist_id'))
-
-        remove_from_collection = in_collection.difference(in_db)
-        add_to_collection = in_db.difference(in_collection)
-
-        # remove playlists which should not be in collection anymore
-        self.playlist_collection.remove({'playlist_id': {'$in': list(remove_from_collection)}})
-
-        # add new playlists
-        for p_id in add_to_collection:
-            # the playlist can be from a show OR the radio default playlist
-            show_id = playlist_to_show.get(p_id, None)
-            is_default = show_id is None
-
-            playlist = self.yaapp_alchemy_session.query(Playlist).get(p_id)
-            radio_uuid = playlist.radio.uuid
+    def _playlist_added_internal(self, playlist_object):
+        # is it a default playlist ?
+        if playlist_object.name == 'default':
             doc = {
-                    'playlist_id': p_id,
-                    'playlist_is_default': is_default,
-                    'show_id': show_id,
-                    'radio_uuid': radio_uuid,
+                    'playlist_id': playlist_object.id,
+                    'playlist_is_default': True,
+                    'show_id': None,
+                    'show_random_play': None,
+                    'radio_uuid': playlist_object.radio.uuid,
                     'update_date': None,
                     'songs': [],
-                    'song_count': 0
+                    'song_count': 0,
+                    'enabled': True
             }
             self.playlist_collection.insert(doc, safe=True)
+            return True
+
+        # is it a show playlist ?
+        show = self.shows.find_one({'playlist_id': playlist_object.id})
+        if show != None:
+            doc = {
+                    'playlist_id': playlist_object.id,
+                    'playlist_is_default': False,
+                    'show_id': show['_id'],
+                    'show_random_play': show['random_play'],
+                    'radio_uuid': playlist_object.radio.uuid,
+                    'update_date': None,
+                    'songs': [],
+                    'song_count': 0,
+                    'enabled': True
+            }
+            self.playlist_collection.insert(doc, safe=True)
+            return True
+
+        return False
+
+    def playlist_added(self, playlist_id):
+        playlist = self.yaapp_alchemy_session.query(Playlist).get(playlist_id)
+        return self._playlist_added_internal(playlist)
+
+    def playlist_deleted(self, playlist_id):
+        self.playlist_collection.remove({'playlist_id': playlist_id})
+
+    def playlist_updated(self, playlist_id):
+        # the playlist has been updated, if it was impossible to build songs for it, now it may have changed, so consider it as enabled
+        self.playlist_collection.find_and_modify({'playlist_id': playlist_id}, update={'$set': {'enabled': True}})
+
+    def set_playlists(self):
+        playlists = self.yaapp_alchemy_session.query(Playlist).filter(Playlist.enabled == True).all()
+        for p in playlists:
+            self._playlist_added_internal(p)
 
 
 class PlaylistManager():
 
-    def __init__(self, start_builder_thread=False):
+    def __init__(self):
         self.logger = Logger().log
 
         # start a thread to build songs list for every playlist
         self.builder = PlaylistBuilder()
-        if start_builder_thread:
-            self.builder.start()
 
     def start_thread(self):
         self.builder.start()
@@ -332,3 +328,12 @@ class PlaylistManager():
                 'duration': yasound_song.duration
         }
         return data
+
+    def handle_playlist_history_event(self, event_type, playlist_id):
+        from radio_history import TransientRadioHistoryManager
+        if event_type == TransientRadioHistoryManager.TYPE_PLAYLIST_ADDED:
+            self.builder.playlist_added(playlist_id)
+        elif event_type == TransientRadioHistoryManager.TYPE_PLAYLIST_DELETED:
+            self.builder.playlist_deleted(playlist_id)
+        elif event_type == TransientRadioHistoryManager.TYPE_PLAYLIST_UPDATED:
+            self.builder.playlist_updated(playlist_id)
