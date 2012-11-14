@@ -223,7 +223,9 @@ class PlaylistBuilder(Thread):
 
     def playlist_updated(self, playlist_id):
         # the playlist has been updated, if it was impossible to build songs for it, now it may have changed, so consider it as enabled
-        self.playlist_collection.find_and_modify({'playlist_id': playlist_id}, update={'$set': {'enabled': True}})
+        playlist_doc = self.playlist_collection.find_and_modify({'playlist_id': playlist_id}, update={'$set': {'enabled': True}})
+        # reset songs: songs may have been removed, added or updated in the playlist
+        self.update_songs(playlist_doc)
 
     def set_playlists(self):
         playlists = self.yaapp_alchemy_session.query(Playlist).filter(Playlist.enabled == True).all()
