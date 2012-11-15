@@ -96,102 +96,10 @@ class RadioScheduler():
         self.logger.debug('flushed')
 
     def run(self):
-        self.last_step_time = datetime.now()
-
-        # starts thread to listen to redis events
-        self.redis_listener.start()
-
-        self.playlist_manager.start_thread()
-        self.current_song_manager.start()
-
-        # starts streamer checker thread
-        if self.enable_ping_streamers:
-            checker = StreamerChecker(self)
-            checker.start()
-
-        # check existing radios
-        self.check_existing_radios()
-
-        # prepare track for radios with no event in the future (events which should have occured when the scheduler was off and which have been cured)
-        for radio_state_doc in self.radio_state_manager.radio_states.find():
-            radio_uuid = radio_state_doc.get('radio_uuid', None)
-            if radio_uuid is None:
-                continue
-            event_count = self.radio_events.find({'radio_uuid': radio_uuid}).count()
-            # if there are events for this radio, next track will be computed later
-            # else, prepare a new track now
-            if event_count == 0:
-                delay_before_play = 0
-                crossfade_duration = 0
-                self.prepare_track(radio_uuid, delay_before_play, crossfade_duration)
-
-        # add the event for the next hour if it does not exist yet
-        hour_event_count = self.radio_events.find({'type': self.EVENT_TYPE_NEW_HOUR_PREPARE}).count()
-        if hour_event_count == 0:
-            self.add_next_hour_event()
-
-        # add the event to check the existing radios if it does not exist yet
-        check_event_count = self.radio_events.find({'type': self.EVENT_TYPE_CHECK_EXISTING_RADIOS}).count()
-        if check_event_count == 0:
-            self.add_next_check_radios_event(self.CHECK_EXISTING_RADIOS_PERIOD)
-
-        # add the event to check if there is no problem with radios' programming
-        if self.enable_programming_check:
-            self.add_next_check_programming_event(self.CHECK_PROGRAMMING_PERIOD)
-
-        quit = False
-        while not quit:
-            if self.enable_time_profiling:
-                time_profile_begin = datetime.now()
-
-            self.current_step_time = datetime.now()
-
-            # find events between last step and now
-            events_query = {'date': {'$lte': self.current_step_time}}
-            events = self.radio_events.find(events_query).sort([('date', ASCENDING)])
-            self.logger.info('...........................................')
-
-            event_count = 0
-            for e in events:
-                # handle event
-                self.handle_event(e)
-                event_count += 1
-            # remove events from list
-            self.radio_events.remove(events_query)
-
-            # find next event
-            next_events = self.radio_events.find({'date': {'$gt': self.current_step_time}}).sort([('date', ASCENDING)]).limit(1)
-            next_event = None
-            if next_events is not None and next_events.count() >= 1:
-                next_event = next_events[0]
-            # else:
-            #     self.logger.debug('next events: %s' % next_events)
-
-            # compute seconds to wait until next event
-            seconds_to_wait = self.DEFAULT_SECONDS_TO_WAIT
-            if next_event is not None:
-                next_date = next_event['date']
-                diff_timedelta = next_date - datetime.now()
-                seconds_to_wait = diff_timedelta.days * 86400 + diff_timedelta.seconds + diff_timedelta.microseconds / 1000000.0
-                seconds_to_wait = max(seconds_to_wait, 0)
-                if self.enable_time_profiling:
-                    self.logger.debug('....... %d events handled' % event_count)
-                    if seconds_to_wait == 0:
-                        self.logger.debug('....... need to process next events NOW !!!')
-                    else:
-                        self.logger.debug('....... wait for %s seconds' % seconds_to_wait)
-
-            # store date for next step
-            self.last_step_time = self.current_step_time
-
-            if self.enable_time_profiling:
-                elapsed = datetime.now() - time_profile_begin
-                elapsed_sec = elapsed.seconds + elapsed.microseconds / 1000000.0
-                percent = elapsed_sec / (elapsed_sec + seconds_to_wait) * 100
-                self.logger.info('main loop: process = %s seconds / wait = %s seconds (%s%%)' % (elapsed_sec, seconds_to_wait, percent))
-
-            # waits until next event
-            time.sleep(seconds_to_wait)
+        while True:
+            # !!!!!!!!!!! HACK !!!!!!!!!!!
+            self.logger.info('HACKY version on branch master DOES NOTHING, just sleeps...')
+            time.sleep(20)
 
     def handle_event(self, event):
         # # debug duration
