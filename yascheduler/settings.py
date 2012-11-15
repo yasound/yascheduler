@@ -37,6 +37,9 @@ PROJECT_ROOT = abspath(dirname(__file__))
 LOG_DIRECTORY = os.path.join(PROJECT_ROOT, 'logs/')
 LOG_FILENAME = os.path.join(LOG_DIRECTORY, 'yascheduler.log')
 
+DATA_DIRECTORY = os.path.join(PROJECT_ROOT, 'data/')
+TIME_EVENTS_SAVE_FILENAME = os.path.join(DATA_DIRECTORY, 'time_events.save')
+
 # sql alchemy
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker

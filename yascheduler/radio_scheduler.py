@@ -67,9 +67,6 @@ class RadioScheduler():
         self.event_manager = TimeEventManager()
         self.history_manager = TransientRadioHistoryManager(self.handle_radio_history_event, self.playlist_manager.handle_playlist_history_event)
 
-        # remove past events (those which sould have occured when the scheduler was off)
-        self.cure_radio_events()
-
     def clear_mongo(self):
         self.event_manager.clear()
         self.radio_state_manager.drop()
@@ -100,7 +97,7 @@ class RadioScheduler():
         self.history_manager.start()
         self.event_manager.start_saver()
 
-        # prepare track for radios with no event in the future (events which should have occured when the scheduler was off and which have been cured)
+        # prepare track for broken radios (with no event in the future)
         self.logger.info('preparing tracks')
         self.logger.info('radio_events.count() = %d' % (self.event_manager.count()))
         uuids = self.event_manager.scheduled_radios()
@@ -112,6 +109,7 @@ class RadioScheduler():
             # if there are events for this radio, next track will be computed later
             # else, prepare a new track now
             if radio_uuid not in uuids:
+                self.logger.info('prepare track for broken radio %s' % radio_uuid)
                 delay_before_play = 0
                 crossfade_duration = 0
                 self.prepare_track(radio_uuid, delay_before_play, crossfade_duration)
@@ -764,12 +762,6 @@ class RadioScheduler():
         res = self.clean_radio_state(radio_uuid)
         self.clean_radio_listeners(radio_uuid)
         return res
-
-    def cure_radio_events(self):
-        """
-        remove all radio events older than now
-        """
-        self.event_manager.remove_past_events(datetime.now())
 
     def register_streamer(self, streamer_name):
         streamer = {'name': streamer_name,

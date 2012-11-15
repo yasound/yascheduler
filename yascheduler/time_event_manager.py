@@ -1,3 +1,4 @@
+import settings
 from datetime import datetime
 from time import mktime
 from blist import sortedlist
@@ -52,7 +53,6 @@ class TimeEventSaver(Thread):
 
 
 class TimeEventManager():
-    SAVE_FILENAME = 'saved_time_events'
 
     def __init__(self):
         ok = self.load()
@@ -97,7 +97,7 @@ class TimeEventManager():
         uuids = set()
         for e in self.time_events:
             if hasattr(e, 'radio_uuid'):
-                uuids.append(e.radio_uuid)
+                uuids.add(e.radio_uuid)
         return uuids
 
     def remove_radio_events(self, radio_uuid):
@@ -106,9 +106,6 @@ class TimeEventManager():
             if hasattr(event, 'radio_uuid') and event.radio_uuid == radio_uuid:
                 self.time_events.pop(i)
 
-    def remove_past_events(self, ref_date):
-        self.pop_past_events(ref_date)
-
     def contains_event_type(self, event_type):
         for event in self.time_events:
             if event.event_type == event_type:
@@ -116,18 +113,18 @@ class TimeEventManager():
         return False
 
     def save(self):
-        logger.info('save time events')
-        f = open(self.SAVE_FILENAME, 'w')
+        logger.info('save time events (%d elements)' % len(self.time_events))
+        f = open(settings.TIME_EVENTS_SAVE_FILENAME, 'w')
         cPickle.dump(self.time_events, f)
 
     def load(self):
         logger.info('load time events')
         try:
-            f = open(self.SAVE_FILENAME, 'r')
+            f = open(settings.TIME_EVENTS_SAVE_FILENAME, 'r')
         except:
             logger.info('load time events FAILED')
             return False
         time_events = cPickle.load(f)
         self.time_events = time_events
-        logger.info('load time events OK')
+        logger.info('load time events OK (%d elements)' % len(self.time_events))
         return True
