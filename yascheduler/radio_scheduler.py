@@ -98,6 +98,7 @@ class RadioScheduler():
             self.streamer_checker.start()
 
         self.history_manager.start()
+        self.event_manager.start_saver()
 
         # prepare track for radios with no event in the future (events which should have occured when the scheduler was off and which have been cured)
         self.logger.info('preparing tracks')
@@ -171,6 +172,7 @@ class RadioScheduler():
         self.redis_listener.join()
         self.playlist_manager.join_thread()
         self.current_song_manager.join()
+        self.event_manager.join_saver()
 
         self.logger.info('radio scheduler "run" is over')
 

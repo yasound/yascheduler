@@ -1,6 +1,12 @@
 from datetime import datetime
 from time import mktime
 from blist import sortedlist
+import cPickle
+from threading import Thread, Event
+import time
+from logger import Logger
+
+logger = Logger().log
 
 
 class TimeEvent():
@@ -22,11 +28,44 @@ class TimeEvent():
     def __gt__(self, other):
         return self.t > other.t
 
+    def __str__(self):
+        return '%s - %s' % (self.event_type, self.date)
+
+
+class TimeEventSaver(Thread):
+    WAIT_TIME = 20  # seconds
+
+    def __init__(self, manager):
+        Thread.__init__(self)
+        self.manager = manager
+        self.quit = Event()
+
+    def run(self):
+        while not self.quit.is_set():
+            self.manager.save()
+
+            time.sleep(self.WAIT_TIME)
+
+    def join(self, timeout=None):
+        self.quit.set()
+        super(TimeEventSaver, self).join(timeout)
+
 
 class TimeEventManager():
+    SAVE_FILENAME = 'saved_time_events'
 
     def __init__(self):
-        self.time_events = sortedlist()
+        ok = self.load()
+        if ok == False:
+            self.time_events = sortedlist()
+
+        self.saver = TimeEventSaver(self)
+
+    def start_saver(self):
+        self.saver.start()
+
+    def join_saver(self, timeout=None):
+        self.saver.join(timeout)
 
     def clear(self):
         self.time_events = sortedlist()
@@ -75,3 +114,20 @@ class TimeEventManager():
             if event.event_type == event_type:
                 return True
         return False
+
+    def save(self):
+        logger.info('save time events')
+        f = open(self.SAVE_FILENAME, 'w')
+        cPickle.dump(self.time_events, f)
+
+    def load(self):
+        logger.info('load time events')
+        try:
+            f = open(self.SAVE_FILENAME, 'r')
+        except:
+            logger.info('load time events FAILED')
+            return False
+        time_events = cPickle.load(f)
+        self.time_events = time_events
+        logger.info('load time events OK')
+        return True
