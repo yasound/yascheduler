@@ -12,7 +12,7 @@ class RadioHistoryEventChecker(Thread):
     """
     thread which regularly handle events
     """
-    WAIT_TIME = 60  # seconds
+    WAIT_TIME = 10  # seconds
 
     def __init__(self, manager):
         Thread.__init__(self)

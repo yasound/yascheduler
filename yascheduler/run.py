@@ -11,6 +11,10 @@ from radio_scheduler import RadioScheduler
 import argparse
 from logger import Logger
 
+
+def interrupt_handler(signum, frame):
+    scheduler.stop()
+
 if __name__ == "__main__":
     Logger().log.info('starting scheduler')
 
@@ -36,4 +40,9 @@ if __name__ == "__main__":
     if flush:
         scheduler.flush()
     else:
+        import signal
+        signal.signal(signal.SIGINT, interrupt_handler)
         scheduler.run()
+
+
+

@@ -31,6 +31,8 @@ class RadioScheduler():
     CHECK_PROGRAMMING_PERIOD = 30
 
     def __init__(self, enable_ping_streamers=True, enable_programming_check=False, enable_time_profiling=False):
+        self.quit = False
+
         self.current_step_time = datetime.now()
         self.last_step_time = self.current_step_time
 
@@ -81,6 +83,9 @@ class RadioScheduler():
         self.current_song_manager.flush()
         self.logger.debug('flushed')
 
+    def stop(self):
+        self.quit = True
+
     def run(self):
         self.last_step_time = datetime.now()
 
@@ -97,7 +102,10 @@ class RadioScheduler():
         self.history_manager.start()
         self.event_manager.start_saver()
 
-        # prepare track for broken radios (with no event in the future)
+        if self.radio_state_manager.radio_states.find_one() == None:  # no radios
+            self.set_radios()
+
+        # prepare track for radios with no event in the future (events which should have occured when the scheduler was off and which have been cured)
         self.logger.info('preparing tracks')
         self.logger.info('radio_events.count() = %d' % (self.event_manager.count()))
         uuids = self.event_manager.scheduled_radios()
@@ -123,8 +131,7 @@ class RadioScheduler():
         if self.enable_programming_check:
             self.add_next_check_programming_event(self.CHECK_PROGRAMMING_PERIOD)
 
-        quit = False
-        while not quit:
+        while not self.quit:
             if self.enable_time_profiling:
                 time_profile_begin = datetime.now()
 
@@ -703,6 +710,11 @@ class RadioScheduler():
     def remove_radio(self, radio_uuid):
         self.radio_state_manager.remove(radio_uuid)
         self.clean_radio_events(radio_uuid)
+
+    def set_radios(self):
+        radios = self.yaapp_alchemy_session.query(Radio).all()
+        for r in radios:
+            self.start_radio(r.uuid)
 
     def add_next_hour_event(self):
         t = datetime.now().time()
