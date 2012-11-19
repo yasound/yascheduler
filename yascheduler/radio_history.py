@@ -80,9 +80,9 @@ class TransientRadioHistoryManager():
         TYPE_RADIO_DELETED
         )
 
-    def __init__(self, radio_event_handler=None, playlist_event_handler=None):
-        self.radio_event_handler = radio_event_handler
-        self.playlist_event_handler = playlist_event_handler
+    def __init__(self, radio_event_handlers=[], playlist_event_handlers=[]):
+        self.radio_event_handlers = radio_event_handlers
+        self.playlist_event_handlers = playlist_event_handlers
 
         self.db = settings.MONGO_DB
         self.collection = self.db.scheduler.transient.radios
@@ -116,14 +116,14 @@ class TransientRadioHistoryManager():
         if event_type in self.radio_event_types and radio_uuid != None:
             self.handle_radio_event(event_type, radio_uuid)
         elif event_type in self.playlist_event_types and playlist_id != None:
-            self.handle_playlist_event(event_type, playlist_id)
+            self.handle_playlist_event(event_type, radio_uuid, playlist_id)
 
     def handle_radio_event(self, event_type, radio_uuid):
         logger.info('TransientRadioHistoryManager: %s - %s' % (event_type, radio_uuid))
-        if self.radio_event_handler:
-            self.radio_event_handler(event_type, radio_uuid)
+        for func in self.radio_event_handlers:
+            func(event_type, radio_uuid)
 
-    def handle_playlist_event(self, event_type, playlist_id):
+    def handle_playlist_event(self, event_type, radio_uuid, playlist_id):
         logger.info('TransientRadioHistoryManager: %s - %s' % (event_type, playlist_id))
-        if self.playlist_event_handler:
-            self.playlist_event_handler(event_type, playlist_id)
+        for func in self.playlist_event_handlers:
+            func(event_type, radio_uuid, playlist_id)

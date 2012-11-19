@@ -65,7 +65,7 @@ class RadioScheduler():
         self.playlist_manager = PlaylistManager()
         self.current_song_manager = CurrentSongManager()
         self.event_manager = TimeEventManager()
-        self.history_manager = TransientRadioHistoryManager(self.handle_radio_history_event, self.playlist_manager.handle_playlist_history_event)
+        self.history_manager = TransientRadioHistoryManager([self.handle_radio_history_event], [self.handle_playlist_history_event, self.playlist_manager.handle_playlist_history_event])
 
     def clear_mongo(self):
         self.event_manager.clear()
@@ -369,7 +369,8 @@ class RadioScheduler():
         track = self.get_next_track(radio_uuid, delay_before_play)
 
         if track is None:
-            # self.logger.debug('prepare_track ERROR: cannot get next track')
+            self.logger.debug('prepare_track ERROR: cannot get next track => remove radio %s' % radio_uuid)
+            self.remove_radio(radio_uuid)
             return None
         track_filename = track.filename
         track_duration = track.duration
@@ -698,6 +699,10 @@ class RadioScheduler():
         self.radio_state_manager.update(radio_state)
         return exists
 
+    def remove_radio(self, radio_uuid):
+        self.radio_state_manager.remove(radio_uuid)
+        self.clean_radio_events(radio_uuid)
+
     def add_next_hour_event(self):
         t = datetime.now().time()
         h = (t.hour + 1) % 24
@@ -739,8 +744,12 @@ class RadioScheduler():
             self.start_radio(radio_uuid)
         elif event_type == TransientRadioHistoryManager.TYPE_RADIO_DELETED:
             self.logger.info('radio %s deleted' % radio_uuid)
-            self.radio_state_manager.remove(radio_uuid)
-            self.clean_radio_events(radio_uuid)
+            self.remove_radio(radio_uuid)
+
+    def handle_playlist_history_event(self, event_type, radio_uuid, playlist_id):
+        if event_type == TransientRadioHistoryManager.TYPE_PLAYLIST_ADDED or event_type == TransientRadioHistoryManager.TYPE_PLAYLIST_UPDATED:
+            if self.radio_state_manager.exists(radio_uuid) == False:
+                self.start_radio(radio_uuid)
 
     def clean_radio_events(self, radio_uuid):
         self.event_manager.remove_radio_events(radio_uuid)
