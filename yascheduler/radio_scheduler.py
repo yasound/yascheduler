@@ -16,7 +16,7 @@ from sqlalchemy.orm import scoped_session
 from sqlalchemy.orm import sessionmaker
 from playlist_manager import PlaylistManager
 from current_song_manager import CurrentSongManager
-from time_event_manager import TimeEventManager
+from time_event_manager import TimeEventManager, TimeEvent
 from radio_history import TransientRadioHistoryManager
 
 
@@ -67,9 +67,6 @@ class RadioScheduler():
         self.event_manager = TimeEventManager()
         self.history_manager = TransientRadioHistoryManager([self.handle_radio_history_event], [self.handle_playlist_history_event, self.playlist_manager.handle_playlist_history_event])
 
-        # remove past events (those which sould have occured when the scheduler was off)
-        self.cure_radio_events()
-
     def clear_mongo(self):
         self.event_manager.clear()
         self.radio_state_manager.drop()
@@ -98,8 +95,9 @@ class RadioScheduler():
             self.streamer_checker.start()
 
         self.history_manager.start()
+        self.event_manager.start_saver()
 
-        # prepare track for radios with no event in the future (events which should have occured when the scheduler was off and which have been cured)
+        # prepare track for broken radios (with no event in the future)
         self.logger.info('preparing tracks')
         self.logger.info('radio_events.count() = %d' % (self.event_manager.count()))
         uuids = self.event_manager.scheduled_radios()
@@ -111,13 +109,14 @@ class RadioScheduler():
             # if there are events for this radio, next track will be computed later
             # else, prepare a new track now
             if radio_uuid not in uuids:
+                self.logger.info('prepare track for broken radio %s' % radio_uuid)
                 delay_before_play = 0
                 crossfade_duration = 0
                 self.prepare_track(radio_uuid, delay_before_play, crossfade_duration)
         self.logger.info('preparing tracks: DONE')
 
         # add the event for the next hour if it does not exist yet
-        if self.event_manager.contains_event_type(TimeEventManager.EVENT_TYPE_NEW_HOUR_PREPARE) == False:
+        if self.event_manager.contains_event_type(TimeEvent.EVENT_TYPE_NEW_HOUR_PREPARE) == False:
             self.add_next_hour_event()
 
         # add the event to check if there is no problem with radios' programming
@@ -171,31 +170,24 @@ class RadioScheduler():
         self.redis_listener.join()
         self.playlist_manager.join_thread()
         self.current_song_manager.join()
+        self.event_manager.join_saver()
 
         self.logger.info('radio scheduler "run" is over')
 
     def handle_event(self, event):
-        # # debug duration
-        # begin = datetime.now()
-        # #
-        event_type = event.get('type', None)
-        if event_type == TimeEventManager.EVENT_TYPE_NEW_HOUR_PREPARE:
+        event_type = event.event_type
+        if event_type == TimeEvent.EVENT_TYPE_NEW_HOUR_PREPARE:
             self.handle_new_hour_prepare(event)
-        elif event_type == TimeEventManager.EVENT_TYPE_NEW_TRACK_START:
+        elif event_type == TimeEvent.EVENT_TYPE_NEW_TRACK_START:
             self.handle_new_track_start(event)
-        elif event_type == TimeEventManager.EVENT_TYPE_NEW_TRACK_PREPARE:
+        elif event_type == TimeEvent.EVENT_TYPE_NEW_TRACK_PREPARE:
             self.handle_new_track_prepare(event)
-        elif event_type == TimeEventManager.EVENT_TYPE_TRACK_CONTINUE:
+        elif event_type == TimeEvent.EVENT_TYPE_TRACK_CONTINUE:
             self.handle_track_continue(event)
         elif event_type == TimeEventManager.EVENT_TYPE_CHECK_PROGRAMMING:
             self.handle_check_programming(event)
         else:
             self.logger.info('event "%s" can not be handled: unknown type' % event)
-
-        # # debug duration
-        # elapsed = datetime.now() - begin
-        # self.logger.info('"%s"   ___%s___ (%s)' % (elapsed, event_type, event['date']))
-        # #
 
     def handle_check_programming(self, event):
         self.check_programming()
@@ -204,11 +196,14 @@ class RadioScheduler():
 
     def handle_new_hour_prepare(self, event):
         self.logger.info('prepare new hour %s' % datetime.now().time().isoformat())
-        delay_before_play = event.get('delay_before_play', self.SONG_PREPARE_DURATION)
-        crossfade_duration = event.get('crossfade_duration', self.CROSSFADE_DURATION)
-        time = event.get('time', None)  # time value is a string like '17:17:13.129150'
+        # delay_before_play = event.get('delay_before_play', self.SONG_PREPARE_DURATION)
+        # crossfade_duration = event.get('crossfade_duration', self.CROSSFADE_DURATION)
+        # time = event.get('time', None)  # time value is a string like '17:17:13.129150'
+        delay_before_play = event.delay_before_play
+        crossfade_duration = event.crossfade_duration
+        time = event.time
         if time is None:
-            self.logger.info('time event does not contain a valid "time" param: %s', event)
+            self.logger.info('time event does not contain a valid "time" param')
             return
 
         query = {
@@ -232,15 +227,22 @@ class RadioScheduler():
                 self.event_manager.remove_radio_events(uuid)
 
                 # store event to restart playing current song after jingle has finished
-                event = {
-                            'type': TimeEventManager.EVENT_TYPE_TRACK_CONTINUE,
-                            'date': self.current_step_time + timedelta(seconds=(delay_before_play + jingle_track.duration - self.CROSSFADE_DURATION - self.SONG_PREPARE_DURATION)),
-                            'radio_uuid': uuid,
-                            'song_id': current_song_id,
-                            'offset': current_song_played,
-                            'delay_before_play': self.SONG_PREPARE_DURATION,
-                            'crossfade_duration': self.CROSSFADE_DURATION
-                }
+                # event = {
+                #             'type': TimeEventManager.EVENT_TYPE_TRACK_CONTINUE,
+                #             'date': self.current_step_time + timedelta(seconds=(delay_before_play + jingle_track.duration - self.CROSSFADE_DURATION - self.SONG_PREPARE_DURATION)),
+                #             'radio_uuid': uuid,
+                #             'song_id': current_song_id,
+                #             'offset': current_song_played,
+                #             'delay_before_play': self.SONG_PREPARE_DURATION,
+                #             'crossfade_duration': self.CROSSFADE_DURATION
+                # }
+                d = self.current_step_time + timedelta(seconds=(delay_before_play + jingle_track.duration - self.CROSSFADE_DURATION - self.SONG_PREPARE_DURATION))
+                event = TimeEvent(TimeEvent.EVENT_TYPE_TRACK_CONTINUE, d)
+                event.radio_uuid = uuid
+                event.song_id = current_song_id
+                event.offset = current_song_played
+                event.delay_before_play = self.SONG_PREPARE_DURATION
+                event.crossfade_duration = self.CROSSFADE_DURATION
                 self.event_manager.insert(event)
 
         # add next hour event
@@ -251,17 +253,22 @@ class RadioScheduler():
         restart a track after it has been paused (for example, because of a time jingle)
         """
         self.logger.info('track continue %s' % datetime.now().time().isoformat())
-        radio_uuid = event.get('radio_uuid', None)
-        song_id = event.get('song_id', None)
+        # radio_uuid = event.get('radio_uuid', None)
+        # song_id = event.get('song_id', None)
+        # offset = event.get('offset', None)
+        # delay_before_play = event.get('delay_before_play', self.SONG_PREPARE_DURATION)
+        # crossfade_duration = event.get('crossfade_duration', self.CROSSFADE_DURATION)
+        radio_uuid = event.radio_uuid
+        song_id = event.song_id
         offset = event.get('offset', None)
-        delay_before_play = event.get('delay_before_play', self.SONG_PREPARE_DURATION)
-        crossfade_duration = event.get('crossfade_duration', self.CROSSFADE_DURATION)
+        delay_before_play = event.delay_before_play
+        crossfade_duration = event.crossfade_duration
         if radio_uuid is None:
-            self.logger.info('"track continue" event does not contain a valid radio uuid   (%s)', event)
+            self.logger.info('"track continue" event does not contain a valid radio uuid')
             return
         if song_id is None or offset is None:
             # event does not contain a valid song id and play offset =>  start a new song !
-            self.logger.info('"track continue" event does not contain a valid song id and play offset: start a new song !   (%s)', event)
+            self.logger.info('"track continue" event does not contain a valid song id and play offset: start a new song !')
             self.prepare_track(radio_uuid, delay_before_play, crossfade_duration)
             return
 
@@ -272,13 +279,20 @@ class RadioScheduler():
 
     def handle_new_track_start(self, event):
         # self.logger.info('track start %s' % datetime.now().time().isoformat())
-        radio_uuid = event.get('radio_uuid', None)
+        # radio_uuid = event.get('radio_uuid', None)
+        # if not radio_uuid:
+        #     self.logger.debug('handle_new_track_start ERROR: radio uuid is none in event')
+        #     return
+        # song_id = event.get('song_id', None)
+        # show_id = event.get('show_id', None)
+        # song_duration = event.get('track_duration', 0)
+        radio_uuid = event.radio_uuid
         if not radio_uuid:
             self.logger.debug('handle_new_track_start ERROR: radio uuid is none in event')
             return
-        song_id = event.get('song_id', None)
-        show_id = event.get('show_id', None)
-        song_duration = event.get('track_duration', 0)
+        song_id = event.song_id
+        show_id = event.show_id if hasattr(event, 'show_id') else None
+        song_duration = event.track_duration
 
         radio_state = self.radio_state_manager.radio_state(radio_uuid)
         radio_state.song_id = song_id
@@ -303,21 +317,16 @@ class RadioScheduler():
         new 'track prepare' event has been received
         we have a delay before a new track must be played in order to prepare this track
         """
-        # # debug duration
-        # begin = datetime.now()
-        # #
         # self.logger.info('prepare track %s' % datetime.now().time().isoformat())
-        radio_uuid = event.get('radio_uuid', None)
+        # radio_uuid = event.get('radio_uuid', None)
+        radio_uuid = event.radio_uuid
         if not radio_uuid:
             return
-        delay_before_play = event.get('delay_before_play', self.SONG_PREPARE_DURATION)
-        crossfade_duration = event.get('crossfade_duration', self.CROSSFADE_DURATION)
+        # delay_before_play = event.get('delay_before_play', self.SONG_PREPARE_DURATION)
+        # crossfade_duration = event.get('crossfade_duration', self.CROSSFADE_DURATION)
+        delay_before_play = event.delay_before_play
+        crossfade_duration = event.crossfade_duration
         self.prepare_track(radio_uuid, delay_before_play, crossfade_duration)
-
-        # # debug duration
-        # elapsed = datetime.now() - begin
-        # self.logger.debug('-- %s handle_new_track_prepare' % elapsed)
-        # #
 
     def play_track(self, radio_uuid, track, delay, offset, crossfade_duration):
         """
@@ -334,21 +343,18 @@ class RadioScheduler():
         next_delay_before_play = self.SONG_PREPARE_DURATION
         next_crossfade_duration = self.CROSSFADE_DURATION
         next_date = self.current_step_time + timedelta(seconds=(delay + track.duration - offset - next_crossfade_duration - next_delay_before_play))
-        event = {
-                'type': TimeEventManager.EVENT_TYPE_NEW_TRACK_PREPARE,
-                'date': next_date,
-                'radio_uuid': radio_uuid,
-                'delay_before_play': next_delay_before_play,
-                'crossfade_duration': next_crossfade_duration
-        }
-        # # debug duration
-        # b = datetime.now()
-        # #
+        # event = {
+        #         'type': TimeEventManager.EVENT_TYPE_NEW_TRACK_PREPARE,
+        #         'date': next_date,
+        #         'radio_uuid': radio_uuid,
+        #         'delay_before_play': next_delay_before_play,
+        #         'crossfade_duration': next_crossfade_duration
+        # }
+        event = TimeEvent(TimeEvent.EVENT_TYPE_NEW_TRACK_PREPARE, next_date)
+        event.radio_uuid = radio_uuid
+        event.delay_before_play = next_delay_before_play
+        event.crossfade_duration = next_crossfade_duration
         self.event_manager.insert(event)
-        # # debug duration
-        # elapsed = datetime.now() - b
-        # self.logger.debug('----- %s store track prepare event' % elapsed)
-        # #
 
         return message
 
@@ -359,20 +365,8 @@ class RadioScheduler():
         3 - send it to the streamer
         4 - create next 'track prepare' event
         """
-        # # debug duration
-        # begin = datetime.now()
-        # #
-        # self.logger.debug('\nprepare track (%s)' % radio_uuid)
-
-        # # debug duration
-        # b = datetime.now()
-        # #
         # 1 get next track
         track = self.get_next_track(radio_uuid, delay_before_play)
-        # # debug duration
-        # elapsed = datetime.now() - b
-        # self.logger.debug('----- %s get next track' % elapsed)
-        # #
 
         if track is None:
             self.logger.debug('prepare_track ERROR: cannot get next track => remove radio %s' % radio_uuid)
@@ -383,44 +377,31 @@ class RadioScheduler():
         offset = 0
 
         # 2 store 'track start' event
-        event = {
-                'type': TimeEventManager.EVENT_TYPE_NEW_TRACK_START,
-                'date': self.current_step_time + timedelta(seconds=delay_before_play),
-                'radio_uuid': radio_uuid,
-                'filename': track_filename,
-                'track_duration': track_duration
-        }
+        # event = {
+        #         'type': TimeEventManager.EVENT_TYPE_NEW_TRACK_START,
+        #         'date': self.current_step_time + timedelta(seconds=delay_before_play),
+        #         'radio_uuid': radio_uuid,
+        #         'filename': track_filename,
+        #         'track_duration': track_duration
+        # }
+        # if track.is_song:
+        #     event['song_id'] = track.song_id  # add the song id in the event if the track is a song
+        # if track.is_from_show:
+        #     event['show_id'] = track.show_id
+        event = TimeEvent(TimeEvent.EVENT_TYPE_NEW_TRACK_START, self.current_step_time + timedelta(seconds=delay_before_play))
+        event.radio_uuid = radio_uuid
+        event.filename = track_filename
+        event.track_duration = track_duration
         if track.is_song:
-            event['song_id'] = track.song_id  # add the song id in the event if the track is a song
+            event.song_id = track.song_id  # add the song id in the event if the track is a song
         if track.is_from_show:
-            event['show_id'] = track.show_id
+            event.song_id = track.show_id
 
-        # # debug duration
-        # b = datetime.now()
-        # #
         self.event_manager.insert(event)
-        # # debug duration
-        # elapsed = datetime.now() - b
-        # self.logger.debug('----- %s store track start event' % elapsed)
-        # #
-
-        # # debug duration
-        # b = datetime.now()
-        # #
 
         # 3 send message to the streamer
         # 4 store next "prepare track" event
         message = self.play_track(radio_uuid, track, delay_before_play, offset, crossfade_duration)
-
-        # # debug duration
-        # elapsed = datetime.now() - b
-        # self.logger.debug('----- %s play track' % elapsed)
-        # #
-
-        # # debug duration
-        # elapsed = datetime.now() - begin
-        # self.logger.debug('---- %s prepare_track' % elapsed)
-        # #
         return message  # for test purpose
 
     def get_current_show(self, radio_uuid, play_time):
@@ -464,11 +445,6 @@ class RadioScheduler():
         a track can be a jingle, a song in a show or a song in the default playlist
         """
         play_time = self.current_step_time + timedelta(seconds=delay_before_play)
-
-        # radios_data = list(self.yaapp_alchemy_session.query(Radio).filter(Radio.uuid == radio_uuid).values(Radio.id))
-        # if len(radios_data) == 0:
-        #     return None
-        # radio_id = radios_data[0][0]
 
         track = self.get_radio_jingle_track(radio_uuid)
 
@@ -732,22 +708,27 @@ class RadioScheduler():
         h = (t.hour + 1) % 24
         t = t.replace(hour=h, minute=0, second=0, microsecond=0)
         delay_before_play = self.SONG_PREPARE_DURATION
-        date = datetime.now().replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)  # next hour
-        event = {
-                    'type': TimeEventManager.EVENT_TYPE_NEW_HOUR_PREPARE,
-                    'delay_before_play': delay_before_play,
-                    'crossfade_duration': self.CROSSFADE_DURATION,
-                    'time': t.isoformat(),
-                    'date': date
-                }
+        d = datetime.now().replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)  # next hour
+        # event = {
+        #             'type': TimeEventManager.EVENT_TYPE_NEW_HOUR_PREPARE,
+        #             'delay_before_play': delay_before_play,
+        #             'crossfade_duration': self.CROSSFADE_DURATION,
+        #             'time': t.isoformat(),
+        #             'date': d
+        #         }
+        event = TimeEvent(TimeEvent.EVENT_TYPE_NEW_HOUR_PREPARE, d)
+        event.delay_before_play = delay_before_play
+        event.crossfade_duration = self.CROSSFADE_DURATION
+        event.time = t.isoformat()
         self.event_manager.insert(event)
 
     def add_next_check_programming_event(self, seconds):
-        date = datetime.now() + timedelta(seconds=seconds)
-        event = {
-                    'type': TimeEventManager.EVENT_TYPE_CHECK_PROGRAMMING,
-                    'date': date
-                }
+        d = datetime.now() + timedelta(seconds=seconds)
+        # event = {
+        #             'type': TimeEventManager.EVENT_TYPE_CHECK_PROGRAMMING,
+        #             'date': d
+        #         }
+        event = TimeEvent(TimeEvent.EVENT_TYPE_CHECK_PROGRAMMING, d)
         self.event_manager.insert(event)
 
     def check_programming(self):
@@ -790,12 +771,6 @@ class RadioScheduler():
         res = self.clean_radio_state(radio_uuid)
         self.clean_radio_listeners(radio_uuid)
         return res
-
-    def cure_radio_events(self):
-        """
-        remove all radio events older than now
-        """
-        self.event_manager.remove_past_events(datetime.now())
 
     def register_streamer(self, streamer_name):
         streamer = {'name': streamer_name,
