@@ -375,8 +375,9 @@ class RadioScheduler():
         # #
 
         if track is None:
-            self.logger.debug('prepare_track ERROR: cannot get next track => remove radio %s' % radio_uuid)
-            self.remove_radio(radio_uuid)
+            #FIXME: it crashes
+            # self.logger.debug('prepare_track ERROR: cannot get next track => remove radio %s' % radio_uuid)
+            # self.remove_radio(radio_uuid)
             return None
         track_filename = track.filename
         track_duration = track.duration
