@@ -192,7 +192,7 @@ class PlaylistBuilder(Thread):
                     'song_count': 0,
                     'enabled': True
             }
-            self.playlist_collection.insert(doc, safe=True)
+            self.playlist_collection.update({'playlist_id': doc['playlist_id']}, doc, upsert=True)
             return True
 
         # is it a show playlist ?
@@ -209,7 +209,7 @@ class PlaylistBuilder(Thread):
                     'song_count': 0,
                     'enabled': True
             }
-            self.playlist_collection.insert(doc, safe=True)
+            self.playlist_collection.update({'playlist_id': doc['playlist_id']}, doc, upsert=True)
             return True
 
         return False
