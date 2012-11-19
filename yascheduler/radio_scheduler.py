@@ -31,6 +31,8 @@ class RadioScheduler():
     CHECK_PROGRAMMING_PERIOD = 30
 
     def __init__(self, enable_ping_streamers=True, enable_programming_check=False, enable_time_profiling=False):
+        self.quit = False
+
         self.current_step_time = datetime.now()
         self.last_step_time = self.current_step_time
 
@@ -84,6 +86,9 @@ class RadioScheduler():
         self.current_song_manager.flush()
         self.logger.debug('flushed')
 
+    def stop(self):
+        self.quit = True
+
     def run(self):
         self.last_step_time = datetime.now()
 
@@ -124,8 +129,7 @@ class RadioScheduler():
         if self.enable_programming_check:
             self.add_next_check_programming_event(self.CHECK_PROGRAMMING_PERIOD)
 
-        quit = False
-        while not quit:
+        while not self.quit:
             if self.enable_time_profiling:
                 time_profile_begin = datetime.now()
 
