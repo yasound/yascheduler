@@ -314,7 +314,7 @@ class TestRadioHistoryManager(TestCase):
             def handle_radio_event(self, event_type, radio_uuid):
                 self.radio_events.append((event_type, radio_uuid))
 
-            def handle_playlist_event(self, event_type, playlist_id):
+            def handle_playlist_event(self, event_type, radio_uuid, playlist_id):
                 self.playlist_events.append((event_type, playlist_id))
 
     def setUp(self):
@@ -325,8 +325,9 @@ class TestRadioHistoryManager(TestCase):
         clean_db(self.yaapp_session, self.yasound_session)
 
     def test_event_handling(self):
-        event_handler = self.EventHandler()
-        manager = TransientRadioHistoryManager(event_handler.handle_radio_event, event_handler.handle_playlist_event)
+        event_handler1 = self.EventHandler()
+        event_handler2 = self.EventHandler()
+        manager = TransientRadioHistoryManager([event_handler1.handle_radio_event, event_handler2.handle_radio_event], [event_handler1.handle_playlist_event, event_handler2.handle_playlist_event])
         manager.collection.remove()
         self.assertEqual(0, manager.collection.count())
 
@@ -360,8 +361,11 @@ class TestRadioHistoryManager(TestCase):
         manager.handle_events()
         self.assertEqual(0, manager.collection.count())
 
-        self.assertEqual(radio_event_count, len(event_handler.radio_events))
-        self.assertEqual(playlist_event_count, len(event_handler.playlist_events))
+        self.assertEqual(radio_event_count, len(event_handler1.radio_events))
+        self.assertEqual(playlist_event_count, len(event_handler1.playlist_events))
+
+        self.assertEqual(radio_event_count, len(event_handler2.radio_events))
+        self.assertEqual(playlist_event_count, len(event_handler2.playlist_events))
 
     def test_scheduler_integration(self):
         # add objects

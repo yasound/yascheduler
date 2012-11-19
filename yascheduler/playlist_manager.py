@@ -331,7 +331,7 @@ class PlaylistManager():
         }
         return data
 
-    def handle_playlist_history_event(self, event_type, playlist_id):
+    def handle_playlist_history_event(self, event_type, radio_uuid, playlist_id):
         from radio_history import TransientRadioHistoryManager
         if event_type == TransientRadioHistoryManager.TYPE_PLAYLIST_ADDED:
             self.builder.playlist_added(playlist_id)
