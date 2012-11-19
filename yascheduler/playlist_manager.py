@@ -224,6 +224,9 @@ class PlaylistBuilder(Thread):
     def playlist_updated(self, playlist_id):
         # the playlist has been updated, if it was impossible to build songs for it, now it may have changed, so consider it as enabled
         playlist_doc = self.playlist_collection.find_and_modify({'playlist_id': playlist_id}, update={'$set': {'enabled': True}})
+        if playlist_doc is None:
+            self.playlist_added(playlist_id)
+            return
         # reset songs: songs may have been removed, added or updated in the playlist
         self.update_songs(playlist_doc)
 
