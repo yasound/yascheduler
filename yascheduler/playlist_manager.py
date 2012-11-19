@@ -231,7 +231,7 @@ class PlaylistBuilder(Thread):
         self.update_songs(playlist_doc)
 
     def set_playlists(self):
-        playlists = self.yaapp_alchemy_session.query(Playlist).filter(Playlist.enabled == True).all()
+        playlists = self.yaapp_alchemy_session.query(Playlist).filter(Playlist.enabled == True, Playlist.radio != None).all()
         for p in playlists:
             self._playlist_added_internal(p)
 
