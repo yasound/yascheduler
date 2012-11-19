@@ -104,6 +104,9 @@ class RadioScheduler():
 
         self.history_manager.start()
 
+        if self.radio_state_manager.radio_states.find_one() == None:  # no radios
+            self.set_radios()
+
         # prepare track for radios with no event in the future (events which should have occured when the scheduler was off and which have been cured)
         self.logger.info('preparing tracks')
         self.logger.info('radio_events.count() = %d' % (self.event_manager.count()))
@@ -731,6 +734,11 @@ class RadioScheduler():
     def remove_radio(self, radio_uuid):
         self.radio_state_manager.remove(radio_uuid)
         self.clean_radio_events(radio_uuid)
+
+    def set_radios(self):
+        radios = self.yaapp_alchemy_session.query(Radio).all()
+        for r in radios:
+            self.start_radio(r.uuid)
 
     def add_next_hour_event(self):
         t = datetime.now().time()
