@@ -30,13 +30,8 @@ class PlaylistBuilder(Thread):
         self.playlist_collection.ensure_index('update_date')
         self.playlist_collection.ensure_index('song_count')
 
-        # access to yaapp db
-        session_factory = sessionmaker(bind=settings.yaapp_alchemy_engine)
-        self.yaapp_alchemy_session = scoped_session(session_factory)
-
-        # access to yasound db
-        session_factory = sessionmaker(bind=settings.yasound_alchemy_engine)
-        self.yasound_alchemy_session = scoped_session(session_factory)
+        self.yaapp_alchemy_session = None
+        self.yasound_alchemy_session = None
 
         # access to shows
         self.shows = settings.MONGO_DB.shows
@@ -52,6 +47,14 @@ class PlaylistBuilder(Thread):
         super(PlaylistBuilder, self).join(timeout)
 
     def run(self):
+        # access to yaapp db
+        session_factory = sessionmaker(bind=settings.yaapp_alchemy_engine)
+        self.yaapp_alchemy_session = scoped_session(session_factory)
+
+        # access to yasound db
+        session_factory = sessionmaker(bind=settings.yasound_alchemy_engine)
+        self.yasound_alchemy_session = scoped_session(session_factory)
+
         # if there is no playlist stored, insert all playlists from db
         if self.playlist_collection.find_one() == None:  # empty
             self.set_playlists()
