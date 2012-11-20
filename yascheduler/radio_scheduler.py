@@ -350,13 +350,6 @@ class RadioScheduler():
         next_delay_before_play = self.SONG_PREPARE_DURATION
         next_crossfade_duration = self.CROSSFADE_DURATION
         next_date = self.current_step_time + timedelta(seconds=(delay + track.duration - offset - next_crossfade_duration - next_delay_before_play))
-        # event = {
-        #         'type': TimeEventManager.EVENT_TYPE_NEW_TRACK_PREPARE,
-        #         'date': next_date,
-        #         'radio_uuid': radio_uuid,
-        #         'delay_before_play': next_delay_before_play,
-        #         'crossfade_duration': next_crossfade_duration
-        # }
         event = TimeEvent(TimeEvent.EVENT_TYPE_NEW_TRACK_PREPARE, next_date)
         event.radio_uuid = radio_uuid
         event.delay_before_play = next_delay_before_play
@@ -645,8 +638,12 @@ class RadioScheduler():
         radio_state_doc = {'radio_uuid': radio_uuid}
         radio_state = RadioState(radio_state_doc)
         self.radio_state_manager.insert(radio_state)
-        # prepare first track
-        self.prepare_track(radio_uuid, 0, 0)  # no delay, no crossfade
+        # prepare first track event
+        event = TimeEvent(TimeEvent.EVENT_TYPE_NEW_TRACK_PREPARE, self.current_step_time)
+        event.radio_uuid = radio_uuid
+        event.delay_before_play = 0
+        event.crossfade_duration = 0
+        self.event_manager.insert(event)
 
     def play_radio(self, radio_uuid, streamer):
         """
@@ -660,10 +657,16 @@ class RadioScheduler():
         # if the radio does not exist, start it
         if not already_started:
             self.logger.debug('play radio %s: need to start radio' % radio_uuid)
-            self.start_radio(radio_uuid)  # start_radio function prepares a new track to play
-            radio_state = self.radio_state_manager.radio_state(radio_uuid)
-            radio_state.master_streamer = streamer
-            self.radio_state_manager.update(radio_state)
+            self.clean_radio(radio_uuid)
+            # create radio state
+            radio_state_doc = {
+                'radio_uuid': radio_uuid,
+                'master_streamer': streamer
+            }
+            radio_state = RadioState(radio_state_doc)
+            self.radio_state_manager.insert(radio_state)
+            # prepare first track
+            self.prepare_track(radio_uuid, 0, 0)  # no delay, no crossfade
             self.logger.debug('play radio %s: need to start radio OK' % radio_uuid)
             return
 
