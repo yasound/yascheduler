@@ -27,14 +27,18 @@ class RedisListener(Thread):
         self.radio_scheduler = radio_scheduler
         self.logger = Logger().log
 
+        self.yaapp_alchemy_session = None
+        self.yasound_alchemy_session = None
+
+    def run(self):
+        self.logger.debug('Redis listener run...')
+
         session_factory = sessionmaker(bind=settings.yaapp_alchemy_engine)
         self.yaapp_alchemy_session = scoped_session(session_factory)
 
         session_factory = sessionmaker(bind=settings.yasound_alchemy_engine)
         self.yasound_alchemy_session = scoped_session(session_factory)
 
-    def run(self):
-        self.logger.debug('Redis listener run...')
         try:
             r = redis.StrictRedis(host=settings.REDIS_HOST, db=settings.REDIS_DB)
             self.pubsub = r.pubsub()
