@@ -687,8 +687,8 @@ class RadioScheduler():
         self.logger.debug('play radio %s: already exists, need to send prepare track msg' % radio_uuid)
         song_id = int(radio_state.song_id)
         song_play_time = radio_state.play_time
-        song = self.yaapp_alchemy_session.query(SongInstance).get(song_id)
-        yasound_song = self.yasound_alchemy_session.query(YasoundSong).get(song.song_metadata.yasound_song_id)
+        song = self.redis_listener.yaapp_alchemy_session.query(SongInstance).get(song_id)
+        yasound_song = self.redis_listener.yasound_alchemy_session.query(YasoundSong).get(song.song_metadata.yasound_song_id)
         track = Track(yasound_song.filename, yasound_song.duration, song_id=song_id)
         delay = 0  # FIXME: or self.SONG_PREPARE_DURATION ?
         elapsed_timedelta = self.current_step_time - song_play_time
