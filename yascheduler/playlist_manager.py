@@ -110,8 +110,8 @@ class PlaylistBuilder(Thread):
 
     def build_ordered_songs(self, playlist_id):
         # follow song order
-        current_song_order = self.builder.yaapp_alchemy_session.query(SongInstance).filter(SongInstance.enabled == True, SongInstance.playlist_id == playlist_id).order_by(SongInstance.last_play_time).first().order
-        next_songs = self.builder.yaapp_alchemy_session.query(SongInstance).filter(SongInstance.enabled == True, SongInstance.playlist_id == playlist_id, SongInstance.order > current_song_order).order_by(SongInstance.order)
+        current_song_order = self.yaapp_alchemy_session.query(SongInstance).filter(SongInstance.enabled == True, SongInstance.playlist_id == playlist_id).order_by(SongInstance.last_play_time).first().order
+        next_songs = self.yaapp_alchemy_session.query(SongInstance).filter(SongInstance.enabled == True, SongInstance.playlist_id == playlist_id, SongInstance.order > current_song_order).order_by(SongInstance.order)
         songs = list(next_songs)
         # if there isn't enough songs, get songs with order lower than current_song_order
         if len(songs) < self.SONG_COUNT_TO_PREPARE:
@@ -319,13 +319,17 @@ class PlaylistManager():
         return track
 
     def track_in_radio(self, radio_uuid, caller_yaapp_session=None, caller_yasound_session=None):
+        if caller_yaapp_session:
+            yaapp_session = caller_yaapp_session
+        else:
+            yaapp_session = self.builder.yaapp_alchemy_session
         # look for 'default' playlist
         playlist_doc = self.builder.playlist_collection.find_one({'radio_uuid': radio_uuid, 'playlist_is_default': True}, {'songs': {'$slice': 1}})
 
         song = None
         if playlist_doc is None:
             self.logger.info('Playlist Manager - track_in_radio: no prepared playlist for radio %s' % radio_uuid)
-            playlist = self.builder.yaapp_alchemy_session.query(Playlist).join(Radio).filter(Radio.uuid == radio_uuid, Playlist.name == 'default').first()
+            playlist = yaapp_session.query(Playlist).join(Radio).filter(Radio.uuid == radio_uuid, Playlist.name == 'default').first()
             if playlist is None:
                 return None
             song = self._random_song(playlist.id, caller_yaapp_session, caller_yasound_session)
@@ -334,7 +338,7 @@ class PlaylistManager():
             self.logger.info('Playlist Manager - track_in_radio: no ready song for radio %s' % radio_uuid)
             playlist_id = playlist_doc['playlist_id']
             if playlist_id == None:
-                playlist = self.builder.yaapp_alchemy_session.query(Playlist).join(Radio).filter(Radio.uuid == radio_uuid, Playlist.name == 'default').first()
+                playlist = yaapp_session.query(Playlist).join(Radio).filter(Radio.uuid == radio_uuid, Playlist.name == 'default').first()
                 if playlist is None:
                     return None
                 else:
