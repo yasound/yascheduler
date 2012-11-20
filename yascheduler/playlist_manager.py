@@ -18,6 +18,10 @@ class PlaylistBuilder(Thread):
     MIN_SONG_COUNT = 3
     CHECK_PLAYLIST_PERIOD = 10 * 60
 
+    TYPE_PLAYLIST_ADDED = 1
+    TYPE_PLAYLIST_DELETED = 2
+    TYPE_PLAYLIST_UPDATED = 3
+
     def __init__(self):
         Thread.__init__(self)
 
@@ -29,6 +33,9 @@ class PlaylistBuilder(Thread):
         self.playlist_collection.ensure_index('playlist_is_default')
         self.playlist_collection.ensure_index('update_date')
         self.playlist_collection.ensure_index('song_count')
+
+        self.playlist_events = settings.MONGO_DB.scheduler.playlist_events
+        self.playlist_collection.ensure_index('playlist_id')
 
         self.yaapp_alchemy_session = None
         self.yasound_alchemy_session = None
@@ -46,7 +53,7 @@ class PlaylistBuilder(Thread):
         self.quit.set()
         super(PlaylistBuilder, self).join(timeout)
 
-    def run(self):
+    def init_alchemy_sessions(self):
         # access to yaapp db
         session_factory = sessionmaker(bind=settings.yaapp_alchemy_engine)
         self.yaapp_alchemy_session = scoped_session(session_factory)
@@ -55,6 +62,9 @@ class PlaylistBuilder(Thread):
         session_factory = sessionmaker(bind=settings.yasound_alchemy_engine)
         self.yasound_alchemy_session = scoped_session(session_factory)
 
+    def run(self):
+        self.init_alchemy_sessions()
+
         # if there is no playlist stored, insert all playlists from db
         if self.playlist_collection.find_one() == None:  # empty
             self.set_playlists()
@@ -62,13 +72,16 @@ class PlaylistBuilder(Thread):
         while not self.quit.is_set():
             self.logger.debug('PlaylistBuilder.....')
 
-            # 1 - compute songs for playlists whose song queue contains less than x songs
+            # 1 - add/delete/update playlists
+            self.handle_playlist_events()
+
+            # 2 - compute songs for playlists whose song queue contains less than x songs
             # it includes newly created playlists
             docs = self.playlist_collection.find({'song_count': {'$lt': self.MIN_SONG_COUNT}, 'enabled': True})
             for doc in docs:
                 self.update_songs(doc)
 
-            # 2 - sleep
+            # 3 - sleep
             time.sleep(1)
 
     def playlist_count(self):
@@ -218,17 +231,43 @@ class PlaylistBuilder(Thread):
         return False
 
     def playlist_added(self, playlist_id):
-        playlist = self.yaapp_alchemy_session.query(Playlist).get(playlist_id)
-        return self._playlist_added_internal(playlist)
+        doc = {
+            'playlist_id': playlist_id,
+            'event_type': self.TYPE_PLAYLIST_ADDED
+        }
+        self.playlist_events.insert(doc, safe=True)
 
     def playlist_deleted(self, playlist_id):
-        self.playlist_collection.remove({'playlist_id': playlist_id})
+        doc = {
+            'playlist_id': playlist_id,
+            'event_type': self.TYPE_PLAYLIST_DELETED
+        }
+        self.playlist_events.insert(doc, safe=True)
 
     def playlist_updated(self, playlist_id):
-        # the playlist has been updated, if it was impossible to build songs for it, now it may have changed, so consider it as enabled
-        playlist_doc = self.playlist_collection.find_and_modify({'playlist_id': playlist_id}, update={'$set': {'enabled': True, 'song_count': 0, 'songs': []}})
-        if playlist_doc is None:
-            self.playlist_added(playlist_id)
+        doc = {
+            'playlist_id': playlist_id,
+            'event_type': self.TYPE_PLAYLIST_UPDATED
+        }
+        self.playlist_events.insert(doc, safe=True)
+
+    def handle_playlist_events(self):
+        while True:
+            event = self.playlist_events.find_and_modify({}, remove=True)
+            if event == None:
+                break
+            playlist_id = event['playlist_id']
+            event_type = event['event_type']
+            if event_type == self.TYPE_PLAYLIST_ADDED:
+                playlist = self.yaapp_alchemy_session.query(Playlist).get(playlist_id)
+                self._playlist_added_internal(playlist)
+            elif event_type == self.TYPE_PLAYLIST_DELETED:
+                self.playlist_collection.remove({'playlist_id': playlist_id})
+            elif event_type == self.TYPE_PLAYLIST_UPDATED:
+                # the playlist has been updated, if it was impossible to build songs for it, now it may have changed, so consider it as enabled
+                playlist_doc = self.playlist_collection.find_and_modify({'playlist_id': playlist_id}, update={'$set': {'enabled': True, 'song_count': 0, 'songs': []}})
+                if playlist_doc is None:
+                    self.playlist_added(playlist_id)
 
     def set_playlists(self):
         playlists = self.yaapp_alchemy_session.query(Playlist).filter(Playlist.enabled == True, Playlist.radio != None).all()

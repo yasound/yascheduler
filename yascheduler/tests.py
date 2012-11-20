@@ -36,6 +36,7 @@ class Test(TestCase):
         clean_db(self.yaapp_session, self.yasound_session)
 
         self.scheduler.flush()
+        self.scheduler.redis_listener.init_alchemy_sessions()
 
     def test_sqlalchemy_models(self):
         count = self.yasound_session.query(YasoundSong).count()
@@ -214,6 +215,7 @@ class TestPlaylistManager(TestCase):
     def setUp(self):
         self.manager = PlaylistManager()
         self.manager.builder.clear_data()
+        self.manager.builder.init_alchemy_sessions()
 
         self.yaapp_session = self.manager.builder.yaapp_alchemy_session
         self.yasound_session = self.manager.builder.yasound_alchemy_session
@@ -281,8 +283,11 @@ class TestPlaylistManager(TestCase):
             self.yaapp_session.add(song)
 
         self.assertEqual(self.manager.builder.playlist_count(), 0)
-        self.manager.handle_playlist_history_event(TransientRadioHistoryManager.TYPE_PLAYLIST_ADDED, p.id)
+        self.manager.handle_playlist_history_event(TransientRadioHistoryManager.TYPE_PLAYLIST_ADDED, r.uuid, p.id)
+        self.assertEqual(self.manager.builder.playlist_events.count(), 1)
+        self.manager.builder.handle_playlist_events()
         self.assertEqual(self.manager.builder.playlist_count(), 1)
+        self.assertEqual(self.manager.builder.playlist_events.count(), 0)
 
         # test song processing
         songs = self.manager.builder.build_random_songs(p.id)
