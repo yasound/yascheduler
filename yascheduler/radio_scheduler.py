@@ -115,12 +115,14 @@ class RadioScheduler():
                 continue
 
             # if there are events for this radio, next track will be computed later
-            # else, prepare a new track now
+            # else, prepare a new track event
             if radio_uuid not in uuids:
-                self.logger.info('prepare track for broken radio %s' % radio_uuid)
-                delay_before_play = 0
-                crossfade_duration = 0
-                self.prepare_track(radio_uuid, delay_before_play, crossfade_duration)
+                self.logger.info('prepare track event for broken radio %s' % radio_uuid)
+                event = TimeEvent(TimeEvent.EVENT_TYPE_NEW_TRACK_PREPARE, self.current_step_time)
+                event.radio_uuid = radio_uuid
+                event.delay_before_play = 0
+                event.crossfade_duration = 0
+                self.event_manager.insert(event)
         self.logger.info('preparing tracks: DONE')
 
         # add the event for the next hour if it does not exist yet
