@@ -155,7 +155,7 @@ class RadioScheduler():
                 seconds_to_wait = self.DEFAULT_SECONDS_TO_WAIT
 
             if self.enable_time_profiling:
-                    self.logger.debug('....... %d events handled' % event_count)
+                    self.logger.debug('....... %d events handled   (%d in queue)' % (event_count, self.event_manager.count()))
                     if seconds_to_wait == 0:
                         self.logger.debug('....... need to process next events NOW !!!')
                     else:
