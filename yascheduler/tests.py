@@ -1,6 +1,4 @@
-import random
 from unittest import TestCase
-import settings
 from models.yaapp_alchemy_models import Radio, Playlist, SongMetadata, SongInstance
 from models.yasound_alchemy_models import YasoundSong
 from models.account_alchemy_models import User, UserProfile, ApiKey
@@ -10,6 +8,8 @@ from radio_state import RadioStateManager, RadioState
 from playlist_manager import PlaylistManager
 from radio_history import TransientRadioHistoryManager
 from datetime import datetime
+from time_event_manager import TimeEventManager, TimeEvent
+
 
 def clean_db(yaapp_session, yasound_session):
     yaapp_session.query(Radio).delete()
@@ -480,3 +480,26 @@ class TestRadioHistoryManager(TestCase):
         self.assertEqual(self.scheduler.playlist_manager.builder.playlist_count(), 2)
 
         self.yaapp_session.commit()
+
+
+class TestRadioHistoryManager(TestCase):
+
+    def setUp(self):
+        self.manager = TimeEventManager()
+        self.manager.clear()
+
+    def test_load_save(self):
+        count = 5
+        for i in range(count):
+            e = TimeEvent(TimeEvent.EVENT_TYPE_NEW_TRACK_PREPARE, datetime.now())
+            e.radio_uuid = 'radio-%d' % i
+            self.manager.insert(e)
+
+        self.manager.save()
+        self.manager.clear()
+        self.assertEqual(0, self.manager.count())
+        self.manager.load()
+        self.assertEqual(count, self.manager.count())
+
+        events = self.manager.pop_past_events(datetime.now())
+        self.assertEqual(count, len(events))
