@@ -715,7 +715,7 @@ class RadioScheduler():
         self.clean_radio_events(radio_uuid)
 
     def set_radios(self):
-        radios = self.yaapp_alchemy_session.query(Radio).filter(Radio.ready == True).all()
+        radios = self.yaapp_alchemy_session.query(Radio).filter(Radio.ready == True, Radio.deleted == False).all()
         for r in radios:
             self.start_radio(r.uuid)
 
