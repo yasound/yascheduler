@@ -253,16 +253,16 @@ class PlaylistManager():
     def flush(self):
         self.builder.clear_data()
 
-    def track_in_playlist(self, playlist_id):
+    def track_in_playlist(self, playlist_id, caller_yaapp_session=None, caller_yasound_session=None):
         playlist_doc = self.builder.playlist_collection.find_one({'playlist_id': playlist_id}, {'songs': {'$slice': 1}})
 
         if playlist_doc is None:
             self.logger.info('Playlist Manager - track_in_playlist: no prepared playlist %s' % playlist_id)
-            song = self._random_song(playlist_id)
+            song = self._random_song(playlist_id, caller_yaapp_session, caller_yasound_session)
 
         elif playlist_doc['songs'] is None or playlist_doc['song_count'] == 0 or len(playlist_doc['songs']) == 0:
             self.logger.info('Playlist Manager - track_in_playlist: no ready song for playlist %s' % playlist_id)
-            song = self._random_song(playlist_id)
+            song = self._random_song(playlist_id, caller_yaapp_session, caller_yasound_session)
 
         else:
             # get first prepared song, remove it and decrement song_count
@@ -279,7 +279,7 @@ class PlaylistManager():
         track = Track(filename, duration, song_id, show_id)
         return track
 
-    def track_in_radio(self, radio_uuid):
+    def track_in_radio(self, radio_uuid, caller_yaapp_session=None, caller_yasound_session=None):
         # look for 'default' playlist
         playlist_doc = self.builder.playlist_collection.find_one({'radio_uuid': radio_uuid, 'playlist_is_default': True}, {'songs': {'$slice': 1}})
 
@@ -289,7 +289,7 @@ class PlaylistManager():
             playlist = self.builder.yaapp_alchemy_session.query(Playlist).join(Radio).filter(Radio.uuid == radio_uuid, Playlist.name == 'default').first()
             if playlist is None:
                 return None
-            song = self._random_song(playlist.id)
+            song = self._random_song(playlist.id, caller_yaapp_session, caller_yasound_session)
 
         elif playlist_doc['songs'] is None or playlist_doc['song_count'] == 0 or len(playlist_doc['songs']) == 0:
             self.logger.info('Playlist Manager - track_in_radio: no ready song for radio %s' % radio_uuid)
@@ -300,7 +300,7 @@ class PlaylistManager():
                     return None
                 else:
                     playlist_id = playlist.id
-            song = self._random_song(playlist_id)
+            song = self._random_song(playlist_id, caller_yaapp_session, caller_yasound_session)
 
         else:
             # get first prepared song, remove it and decrement song_count
@@ -317,14 +317,24 @@ class PlaylistManager():
         track = Track(filename, duration, song_id, show_id)
         return track
 
-    def _random_song(self, playlist_id):
-        song = self.builder.yaapp_alchemy_session.query(SongInstance).filter(SongInstance.enabled == True, SongInstance.playlist_id == playlist_id).order_by(SongInstance.last_play_time).first()
+    def _random_song(self, playlist_id, caller_yaapp_session, caller_yasound_session):
+        if caller_yaapp_session:
+            yaapp_session = caller_yaapp_session
+        else:
+            yaapp_session = self.builder.yaapp_alchemy_session
+
+        if caller_yasound_session:
+            yasound_session = caller_yasound_session
+        else:
+            yasound_session = self.builder.yasound_alchemy_session
+
+        song = yaapp_session.query(SongInstance).filter(SongInstance.enabled == True, SongInstance.playlist_id == playlist_id).order_by(SongInstance.last_play_time).first()
         if song == None:
             return None
         yasound_song_id = song.song_metadata.yasound_song_id
         if yasound_song_id == None:
             return None
-        yasound_song = self.builder.yasound_alchemy_session.query(YasoundSong).get(yasound_song_id)
+        yasound_song = yasound_session.query(YasoundSong).get(yasound_song_id)
         if yasound_song == None:
             return None
         data = {

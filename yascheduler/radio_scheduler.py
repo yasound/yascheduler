@@ -456,11 +456,11 @@ class RadioScheduler():
             show_current = self.get_current_show(radio_uuid, play_time)
             if show_current:
                 # track = self.get_song_in_show(radio_uuid, show_current['_id'], play_time)
-                track = self.playlist_manager.track_in_playlist(show_current['playlist_id'])
+                track = self.playlist_manager.track_in_playlist(show_current['playlist_id'], self.yaapp_alchemy_session, self.yasound_alchemy_session)
 
         if track is None:  # 3 choose a song in the default playlist
             # track = self.get_song_default(radio_id, play_time)
-            track = self.playlist_manager.track_in_radio(radio_uuid)
+            track = self.playlist_manager.track_in_radio(radio_uuid, self.yaapp_alchemy_session, self.yasound_alchemy_session)
 
         return track
 
