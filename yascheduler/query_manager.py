@@ -3,6 +3,9 @@ from models.yaapp_alchemy_models import SongInstance, Playlist, Radio, SongMetad
 from models.account_alchemy_models import User
 from models.yasound_alchemy_models import YasoundSong
 from sqlalchemy import or_
+from logger import Logger
+
+logger = Logger().log
 
 QUERY_TYPE_RADIO_EXISTS = 1
 QUERY_TYPE_READY_RADIOS = 2
@@ -25,10 +28,12 @@ QUERY_TYPE_USER_BY_ID = 16
 def yaquery(query_type, *args):
     try:
         res = yaquery_internal(query_type, args)
-    except:
+    except Exception, err:
+        logger.debug('query exception: %s' % err)
         settings.yaapp_alchemy_session.remove()
         settings.yasound_alchemy_session.remove()
         res = yaquery_internal(query_type, args)
+        logger.debug('same query with a new session: OK')
     return res
 
 
