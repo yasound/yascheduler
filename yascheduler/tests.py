@@ -9,6 +9,7 @@ from playlist_manager import PlaylistManager
 from radio_history import TransientRadioHistoryManager
 from datetime import datetime
 from time_event_manager import TimeEventManager, TimeEvent
+import settings
 
 
 def clean_db(yaapp_session, yasound_session):
@@ -31,12 +32,11 @@ class Test(TestCase):
 
     def setUp(self):
         self.scheduler = RadioScheduler()
-        self.yaapp_session = self.scheduler.yaapp_alchemy_session
-        self.yasound_session = self.scheduler.yasound_alchemy_session
+        self.yaapp_session = settings.yaapp_alchemy_session
+        self.yasound_session = settings.yasound_alchemy_session
         clean_db(self.yaapp_session, self.yasound_session)
 
         self.scheduler.flush()
-        self.scheduler.redis_listener.init_alchemy_sessions()
 
     def test_sqlalchemy_models(self):
         count = self.yasound_session.query(YasoundSong).count()
@@ -215,10 +215,9 @@ class TestPlaylistManager(TestCase):
     def setUp(self):
         self.manager = PlaylistManager()
         self.manager.builder.clear_data()
-        self.manager.builder.init_alchemy_sessions()
 
-        self.yaapp_session = self.manager.builder.yaapp_alchemy_session
-        self.yasound_session = self.manager.builder.yasound_alchemy_session
+        self.yaapp_session = settings.yaapp_alchemy_session
+        self.yasound_session = settings.yasound_alchemy_session
         clean_db(self.yaapp_session, self.yasound_session)
 
     def test_set_playlists(self):
@@ -325,8 +324,8 @@ class TestRadioHistoryManager(TestCase):
     def setUp(self):
         self.scheduler = RadioScheduler()
         self.scheduler.flush()
-        self.yaapp_session = self.scheduler.yaapp_alchemy_session
-        self.yasound_session = self.scheduler.yasound_alchemy_session
+        self.yaapp_session = settings.yaapp_alchemy_session
+        self.yasound_session = settings.yasound_alchemy_session
         clean_db(self.yaapp_session, self.yasound_session)
 
     def test_event_handling(self):

@@ -42,7 +42,7 @@ TIME_EVENTS_SAVE_FILENAME = os.path.join(DATA_DIRECTORY, 'time_events.save')
 
 # sql alchemy
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, scoped_session
 from sqlalchemy.engine.url import URL
 
 if LOCAL_MODE:
@@ -84,6 +84,12 @@ elif TEST_MODE:
 
 # yasound_session_maker = sessionmaker()
 # yasound_session_maker.configure(bind=yasound_alchemy_engine)
+
+session_factory = sessionmaker(bind=yaapp_alchemy_engine)
+yaapp_alchemy_session = scoped_session(session_factory)
+
+session_factory = sessionmaker(bind=yasound_alchemy_engine)
+yasound_alchemy_session = scoped_session(session_factory)
 
 # mongodb
 from pymongo.connection import Connection
