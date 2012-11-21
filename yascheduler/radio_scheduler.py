@@ -801,7 +801,13 @@ class RadioScheduler():
         url_params = {'key': settings.SCHEDULER_KEY}
         if user_id is not None and user_id != '':
             user_id = int(user_id)
-            user = settings.yaapp_alchemy_session.query(User).get(user_id)
+            # user = settings.yaapp_alchemy_session.query(User).get(user_id)
+            try:
+                user = settings.yaapp_alchemy_session.query(User).get(user_id)
+            except Exception, err:
+                self.logger.debug('register_listener exception: %s (try to remove session)' % err)
+                settings.yaapp_alchemy_session.remove()
+                user = settings.yaapp_alchemy_session.query(User).get(user_id)
             if user is not None:
                 url_params['username'] = user.username
                 url_params['api_key'] = user.api_key.key
