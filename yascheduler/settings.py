@@ -67,10 +67,10 @@ elif PRODUCTION_MODE:
     YASOUND_SERVER = 'https://yasound.com'
 
     yaapp_db = URL(drivername='mysql', host='yas-sql-01', database='yaapp', query=  { 'read_default_file' : '~/.my.cnf' } )
-    yaapp_alchemy_engine = create_engine(name_or_url=yaapp_db)
+    yaapp_alchemy_engine = create_engine(name_or_url=yaapp_db, pool_recycle=1800)
 
     yasound_db = URL(drivername='mysql', host='yas-sql-01', database='yasound', query=  { 'read_default_file' : '~/.my.cnf' } )
-    yasound_alchemy_engine = create_engine(name_or_url=yasound_db)
+    yasound_alchemy_engine = create_engine(name_or_url=yasound_db, pool_recycle=1800)
 
 elif TEST_MODE:
     YASOUND_SERVER = 'http://127.0.0.1:8000'
