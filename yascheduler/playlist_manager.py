@@ -1,13 +1,11 @@
 from threading import Thread, Event
 import settings
 from logger import Logger
-from sqlalchemy import or_
-from models.yaapp_alchemy_models import Playlist, SongInstance, SongMetadata, Radio
-from models.yasound_alchemy_models import YasoundSong
 from datetime import datetime, timedelta
 from track import Track
 import random
 import time
+from query_manager import query_yasound_song, query_current_song, query_next_ordered_songs, query_next_ordered_songs_from_order0, query_old_songs, query_songs, query_playlist, query_enabled_playlists, query_radio_default_playlist, query_random_song
 
 
 class PlaylistBuilder(Thread):
@@ -94,17 +92,17 @@ class PlaylistBuilder(Thread):
 
     def build_ordered_songs(self, playlist_id):
         # follow song order
-        current_song_order = settings.yaapp_alchemy_session.query(SongInstance).filter(SongInstance.enabled == True, SongInstance.playlist_id == playlist_id).order_by(SongInstance.last_play_time).first().order
-        next_songs = settings.yaapp_alchemy_session.query(SongInstance).filter(SongInstance.enabled == True, SongInstance.playlist_id == playlist_id, SongInstance.order > current_song_order).order_by(SongInstance.order)
+        current_song_order = query_current_song(playlist_id).order
+        next_songs = query_next_ordered_songs(playlist_id, current_song_order)
         songs = list(next_songs)
         # if there isn't enough songs, get songs with order lower than current_song_order
         if len(songs) < self.SONG_COUNT_TO_PREPARE:
-            next_songs = settings.yaapp_alchemy_session.query(SongInstance).filter(SongInstance.enabled == True, SongInstance.playlist_id == playlist_id, SongInstance.order <= current_song_order).order_by(SongInstance.order)
+            next_songs = query_next_ordered_songs_from_order0(playlist_id, current_song_order)
             songs.append(list(next_songs))
 
         songs_data = []
         for s in songs:
-            yasound_song = settings.yasound_alchemy_session.query(YasoundSong).get(s.song_metadata.yasound_song_id)
+            yasound_song = query_yasound_song(s.song_metadata.yasound_song_id)
             song_id = s.id
             filename = yasound_song.filename
             duration = yasound_song.duration
@@ -123,12 +121,12 @@ class PlaylistBuilder(Thread):
         # SongInstance last_play_time is None or < time_limit
         # SongMetadata yasound_song_id > 0
         # order by last_play_time
-        query = settings.yaapp_alchemy_session.query(SongInstance).join(SongMetadata).filter(SongInstance.playlist_id == playlist_id, SongInstance.enabled == True, or_(SongInstance.last_play_time < time_limit, SongInstance.last_play_time == None), SongMetadata.yasound_song_id > 0).order_by(SongInstance.last_play_time)
+        query = query_old_songs(playlist_id, time_limit)
         songs_data = list(query)
         count = len(songs_data)
 
         if count == 0:  # try without time limit
-            query = settings.yaapp_alchemy_session.query(SongInstance).join(SongMetadata).filter(SongInstance.playlist_id == playlist_id, SongInstance.enabled == True, SongMetadata.yasound_song_id > 0).order_by(SongInstance.last_play_time)
+            query = query_songs(playlist_id)
             songs_data = list(query)
             count = len(songs_data)
 
@@ -169,7 +167,7 @@ class PlaylistBuilder(Thread):
             total_weight -= song_weight
 
             song_data = weighted_song[1]
-            yasound_song = settings.yasound_alchemy_session.query(YasoundSong).get(song_data.song_metadata.yasound_song_id)
+            yasound_song = query_yasound_song(song_data.song_metadata.yasound_song_id)
             song = {
                     'song_id': song_data.id,
                     'filename': yasound_song.filename,
@@ -243,7 +241,7 @@ class PlaylistBuilder(Thread):
             playlist_id = event['playlist_id']
             event_type = event['event_type']
             if event_type == self.TYPE_PLAYLIST_ADDED:
-                playlist = settings.yaapp_alchemy_session.query(Playlist).get(playlist_id)
+                playlist = query_playlist(playlist_id)
                 self._playlist_added_internal(playlist)
             elif event_type == self.TYPE_PLAYLIST_DELETED:
                 self.playlist_collection.remove({'playlist_id': playlist_id})
@@ -254,7 +252,7 @@ class PlaylistBuilder(Thread):
                     self.playlist_added(playlist_id)
 
     def set_playlists(self):
-        playlists = settings.yaapp_alchemy_session.query(Playlist).filter(Playlist.enabled == True, Playlist.radio != None).all()
+        playlists = query_enabled_playlists()
         for p in playlists:
             self._playlist_added_internal(p)
 
@@ -309,7 +307,7 @@ class PlaylistManager():
         song = None
         if playlist_doc is None:
             self.logger.info('Playlist Manager - track_in_radio: no prepared playlist for radio %s' % radio_uuid)
-            playlist = settings.yaapp_alchemy_session.query(Playlist).join(Radio).filter(Radio.uuid == radio_uuid, Playlist.name == 'default').first()
+            playlist = query_radio_default_playlist(radio_uuid)
             if playlist is None:
                 return None
             song = self._random_song(playlist.id)
@@ -318,7 +316,7 @@ class PlaylistManager():
             self.logger.info('Playlist Manager - track_in_radio: no ready song for radio %s' % radio_uuid)
             playlist_id = playlist_doc['playlist_id']
             if playlist_id == None:
-                playlist = settings.yaapp_alchemy_session.query(Playlist).join(Radio).filter(Radio.uuid == radio_uuid, Playlist.name == 'default').first()
+                playlist = query_radio_default_playlist(radio_uuid)
                 if playlist is None:
                     return None
                 else:
@@ -341,13 +339,13 @@ class PlaylistManager():
         return track
 
     def _random_song(self, playlist_id):
-        song = settings.yaapp_alchemy_session.query(SongInstance).filter(SongInstance.enabled == True, SongInstance.playlist_id == playlist_id).order_by(SongInstance.last_play_time).first()
+        song = query_random_song(playlist_id)
         if song == None:
             return None
         yasound_song_id = song.song_metadata.yasound_song_id
         if yasound_song_id == None:
             return None
-        yasound_song = settings.yasound_alchemy_session.query(YasoundSong).get(yasound_song_id)
+        yasound_song = query_yasound_song(yasound_song_id)
         if yasound_song == None:
             return None
         data = {

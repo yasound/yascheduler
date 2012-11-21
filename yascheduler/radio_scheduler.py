@@ -17,6 +17,8 @@ from current_song_manager import CurrentSongManager
 from time_event_manager import TimeEventManager, TimeEvent
 from radio_history import TransientRadioHistoryManager
 
+from query_manager import query_song, query_radio_playlists, query_radio_exists, query_user_by_username, query_user_by_id, query_ready_radios, query_yasound_song
+
 
 class RadioScheduler():
     STREAMER_PING_STATUS_OK = 'ok'
@@ -273,8 +275,8 @@ class RadioScheduler():
             self.prepare_track(radio_uuid, delay_before_play, crossfade_duration)
             return
 
-        song = settings.yaapp_alchemy_session.query(SongInstance).get(song_id)
-        yasound_song = settings.yasound_alchemy_session.query(YasoundSong).get(song.song_metadata.yasound_song_id)
+        song = query_song(song_id)
+        yasound_song = query_yasound_song(song.song_metadata.yasound_song_id)
         track = Track(yasound_song.filename, yasound_song.duration, song_id=song_id)
         self.play_track(radio_uuid, track, delay_before_play, offset, crossfade_duration)
 
@@ -393,7 +395,7 @@ class RadioScheduler():
         """
         get current show if exists
         """
-        playlists = settings.yaapp_alchemy_session.query(Playlist).join(Radio).filter(Radio.uuid == radio_uuid)
+        playlists = query_radio_playlists(radio_uuid)
         playlist_ids = [x[0] for x in playlists.values(Playlist.id)]
         shows = self.shows.find({'playlist_id': {'$in': playlist_ids}, 'enabled': True}).sort([('time', DESCENDING)])
         current = None
@@ -468,7 +470,7 @@ class RadioScheduler():
         streamer = data.get('streamer', None)
         if radio_uuid is None or streamer is None:
             return
-        if settings.yaapp_alchemy_session.query(Radio).filter(Radio.uuid == radio_uuid).count() == 0:
+        if query_radio_exists(radio_uuid):
             # radio unknown: send 'radio_unknpwn' message to the streamer
             message = self.publisher.send_radio_unknown_message(radio_uuid, streamer)
             return
@@ -536,7 +538,7 @@ class RadioScheduler():
             api_key = data.get('api_key', None)
             if username is not None and api_key is not None:  # auth with username and api_key (for old clients compatibility)
                 self.logger.debug('user auth: username = %s, api_key = %s' % (username, api_key))
-                user = settings.yaapp_alchemy_session.query(User).filter(User.username == username).first()
+                user = query_user_by_username(username)
                 user_id = None
                 if user.api_key.key == api_key:
                     user_id = user.id
@@ -609,7 +611,7 @@ class RadioScheduler():
         """
         if user_id is None:
             return False
-        user = settings.yaapp_alchemy_session.query(User).get(user_id)
+        user = query_user_by_id(user_id)
         return user.userprofile.hd_enabled
 
     def start_radio(self, radio_uuid):
@@ -670,8 +672,8 @@ class RadioScheduler():
         self.logger.debug('play radio %s: already exists, need to send prepare track msg' % radio_uuid)
         song_id = int(radio_state.song_id)
         song_play_time = radio_state.play_time
-        song = settings.yaapp_alchemy_session.query(SongInstance).get(song_id)
-        yasound_song = settings.yasound_alchemy_session.query(YasoundSong).get(song.song_metadata.yasound_song_id)
+        song = query_song(song_id)
+        yasound_song = query_yasound_song(song.song_metadata.yasound_song_id)
         track = Track(yasound_song.filename, yasound_song.duration, song_id=song_id)
         delay = 0  # FIXME: or self.SONG_PREPARE_DURATION ?
         elapsed_timedelta = self.current_step_time - song_play_time
@@ -700,7 +702,7 @@ class RadioScheduler():
         self.clean_radio_events(radio_uuid)
 
     def set_radios(self):
-        radios = settings.yaapp_alchemy_session.query(Radio).filter(Radio.ready == True, Radio.deleted == False).all()
+        radios = query_ready_radios()
         for r in radios:
             self.start_radio(r.uuid)
 
@@ -801,13 +803,7 @@ class RadioScheduler():
         url_params = {'key': settings.SCHEDULER_KEY}
         if user_id is not None and user_id != '':
             user_id = int(user_id)
-            # user = settings.yaapp_alchemy_session.query(User).get(user_id)
-            try:
-                user = settings.yaapp_alchemy_session.query(User).get(user_id)
-            except Exception, err:
-                self.logger.debug('register_listener exception: %s (try to remove session)' % err)
-                settings.yaapp_alchemy_session.remove()
-                user = settings.yaapp_alchemy_session.query(User).get(user_id)
+            user = query_user_by_id(user_id)
             if user is not None:
                 url_params['username'] = user.username
                 url_params['api_key'] = user.api_key.key
@@ -853,7 +849,7 @@ class RadioScheduler():
                         'listening_duration': seconds
         }
         if user_id is not None:
-            user = settings.yaapp_alchemy_session.query(User).get(user_id)
+            user = query_user_by_id(user_id)
             url_params['username'] = user.username
             url_params['api_key'] = user.api_key.key
         url = settings.YASOUND_SERVER + '/api/v1/radio/%s/stop_listening/' % (radio_uuid,)
