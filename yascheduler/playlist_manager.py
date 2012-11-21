@@ -5,7 +5,8 @@ from datetime import datetime, timedelta
 from track import Track
 import random
 import time
-from query_manager import query_yasound_song, query_current_song, query_next_ordered_songs, query_next_ordered_songs_from_order0, query_old_songs, query_songs, query_playlist, query_enabled_playlists, query_radio_default_playlist, query_random_song
+import query_manager
+from query_manager import yaquery
 
 
 class PlaylistBuilder(Thread):
@@ -92,17 +93,17 @@ class PlaylistBuilder(Thread):
 
     def build_ordered_songs(self, playlist_id):
         # follow song order
-        current_song_order = query_current_song(playlist_id).order
-        next_songs = query_next_ordered_songs(playlist_id, current_song_order)
+        current_song_order = yaquery(query_manager.QUERY_TYPE_CURRENT_SONG, playlist_id).order
+        next_songs = yaquery(query_manager.QUERY_TYPE_NEXT_SONGS, playlist_id, current_song_order)
         songs = list(next_songs)
         # if there isn't enough songs, get songs with order lower than current_song_order
         if len(songs) < self.SONG_COUNT_TO_PREPARE:
-            next_songs = query_next_ordered_songs_from_order0(playlist_id, current_song_order)
+            next_songs = yaquery(query_manager.QUERY_TYPE_NEXT_SONGS_PART2, playlist_id, current_song_order)
             songs.append(list(next_songs))
 
         songs_data = []
         for s in songs:
-            yasound_song = query_yasound_song(s.song_metadata.yasound_song_id)
+            yasound_song = yaquery(query_manager.QUERY_TYPE_YASOUND_SONG, s.song_metadata.yasound_song_id)
             song_id = s.id
             filename = yasound_song.filename
             duration = yasound_song.duration
@@ -121,13 +122,13 @@ class PlaylistBuilder(Thread):
         # SongInstance last_play_time is None or < time_limit
         # SongMetadata yasound_song_id > 0
         # order by last_play_time
-        query = query_old_songs(playlist_id, time_limit)
-        songs_data = list(query)
+        songs_query = yaquery(query_manager.QUERY_TYPE_OLD_SONGS, playlist_id, time_limit)
+        songs_data = list(songs_query)
         count = len(songs_data)
 
         if count == 0:  # try without time limit
-            query = query_songs(playlist_id)
-            songs_data = list(query)
+            songs_query = yaquery(query_manager.QUERY_TYPE_SONGS, playlist_id)
+            songs_data = list(songs_query)
             count = len(songs_data)
 
         if count == 0:
@@ -167,7 +168,7 @@ class PlaylistBuilder(Thread):
             total_weight -= song_weight
 
             song_data = weighted_song[1]
-            yasound_song = query_yasound_song(song_data.song_metadata.yasound_song_id)
+            yasound_song = yaquery(query_manager.QUERY_TYPE_YASOUND_SONG, song_data.song_metadata.yasound_song_id)
             song = {
                     'song_id': song_data.id,
                     'filename': yasound_song.filename,
@@ -241,7 +242,7 @@ class PlaylistBuilder(Thread):
             playlist_id = event['playlist_id']
             event_type = event['event_type']
             if event_type == self.TYPE_PLAYLIST_ADDED:
-                playlist = query_playlist(playlist_id)
+                playlist = yaquery(query_manager.QUERY_TYPE_PLAYLIST, playlist_id)
                 self._playlist_added_internal(playlist)
             elif event_type == self.TYPE_PLAYLIST_DELETED:
                 self.playlist_collection.remove({'playlist_id': playlist_id})
@@ -252,7 +253,7 @@ class PlaylistBuilder(Thread):
                     self.playlist_added(playlist_id)
 
     def set_playlists(self):
-        playlists = query_enabled_playlists()
+        playlists = yaquery(query_manager.QUERY_TYPE_ENABLED_PLAYLISTS)
         for p in playlists:
             self._playlist_added_internal(p)
 
@@ -307,7 +308,7 @@ class PlaylistManager():
         song = None
         if playlist_doc is None:
             self.logger.info('Playlist Manager - track_in_radio: no prepared playlist for radio %s' % radio_uuid)
-            playlist = query_radio_default_playlist(radio_uuid)
+            playlist = yaquery(query_manager.QUERY_TYPE_RADIO_DEFAULT_PLAYLIST, radio_uuid)
             if playlist is None:
                 return None
             song = self._random_song(playlist.id)
@@ -316,7 +317,7 @@ class PlaylistManager():
             self.logger.info('Playlist Manager - track_in_radio: no ready song for radio %s' % radio_uuid)
             playlist_id = playlist_doc['playlist_id']
             if playlist_id == None:
-                playlist = query_radio_default_playlist(radio_uuid)
+                playlist = yaquery(query_manager.QUERY_TYPE_RADIO_DEFAULT_PLAYLIST, radio_uuid)
                 if playlist is None:
                     return None
                 else:
@@ -339,13 +340,13 @@ class PlaylistManager():
         return track
 
     def _random_song(self, playlist_id):
-        song = query_random_song(playlist_id)
+        song = yaquery(query_manager.QUERY_TYPE_RANDOM_SONG, playlist_id)
         if song == None:
             return None
         yasound_song_id = song.song_metadata.yasound_song_id
         if yasound_song_id == None:
             return None
-        yasound_song = query_yasound_song(yasound_song_id)
+        yasound_song = yaquery(query_manager.QUERY_TYPE_YASOUND_SONG, yasound_song_id)
         if yasound_song == None:
             return None
         data = {

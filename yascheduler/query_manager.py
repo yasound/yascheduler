@@ -4,6 +4,70 @@ from models.account_alchemy_models import User
 from models.yasound_alchemy_models import YasoundSong
 from sqlalchemy import or_
 
+QUERY_TYPE_RADIO_EXISTS = 1
+QUERY_TYPE_READY_RADIOS = 2
+QUERY_TYPE_ENABLED_PLAYLISTS = 3
+QUERY_TYPE_RADIO_PLAYLISTS = 4
+QUERY_TYPE_RADIO_DEFAULT_PLAYLIST = 5
+QUERY_TYPE_PLAYLIST = 6
+QUERY_TYPE_SONG = 7
+QUERY_TYPE_CURRENT_SONG = 8
+QUERY_TYPE_NEXT_SONGS = 9
+QUERY_TYPE_NEXT_SONGS_PART2 = 10
+QUERY_TYPE_OLD_SONGS = 11
+QUERY_TYPE_SONGS = 12
+QUERY_TYPE_RANDOM_SONG = 13
+QUERY_TYPE_YASOUND_SONG = 14
+QUERY_TYPE_USER_BY_USERNAME = 15
+QUERY_TYPE_USER_BY_ID = 16
+
+
+def yaquery(query_type, *args):
+    try:
+        res = yaquery_internal(query_type, args)
+    except:
+        settings.yaapp_alchemy_session.remove()
+        settings.yasound_alchemy_session.remove()
+        res = yaquery_internal(query_type, args)
+    return res
+
+
+def yaquery_internal(query_type, args):
+    if query_type == QUERY_TYPE_RADIO_EXISTS:
+        return query_radio_exists(args[0])
+    elif query_type == QUERY_TYPE_READY_RADIOS:
+        return query_ready_radios()
+    elif query_type == QUERY_TYPE_ENABLED_PLAYLISTS:
+        return query_enabled_playlists()
+    elif query_type == QUERY_TYPE_RADIO_PLAYLISTS:
+        return query_radio_playlists(args[0])
+    elif query_type == QUERY_TYPE_RADIO_DEFAULT_PLAYLIST:
+        return query_radio_default_playlist(args[0])
+    elif query_type == QUERY_TYPE_PLAYLIST:
+        return query_playlist(args[0])
+    elif query_type == QUERY_TYPE_SONG:
+        return query_song(args[0])
+    elif query_type == QUERY_TYPE_CURRENT_SONG:
+        return query_current_song(args[0])
+    elif query_type == QUERY_TYPE_NEXT_SONGS:
+        return query_next_ordered_songs(args[0], args[1])
+    elif query_type == QUERY_TYPE_NEXT_SONGS_PART2:
+        return query_next_ordered_songs_from_order0(args[0], args[1])
+    elif query_type == QUERY_TYPE_OLD_SONGS:
+        return query_old_songs(args[0], args[1])
+    elif query_type == QUERY_TYPE_SONGS:
+        return query_songs(args[0])
+    elif query_type == QUERY_TYPE_RANDOM_SONG:
+        return query_random_song(args[0])
+    elif query_type == QUERY_TYPE_YASOUND_SONG:
+        return query_yasound_song(args[0])
+    elif query_type == QUERY_TYPE_USER_BY_USERNAME:
+        return query_user_by_username(args[0])
+    elif query_type == QUERY_TYPE_USER_BY_ID:
+        return query_user_by_id(args[0])
+
+    return None
+
 
 #################################
 # Radio
