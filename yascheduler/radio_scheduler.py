@@ -360,15 +360,21 @@ class RadioScheduler():
 
         return message
 
-    def prepare_track(self, radio_uuid, delay_before_play, crossfade_duration):
+    def prepare_track(self, radio_uuid, delay_before_play, crossfade_duration, yaapp_alchemy_session=None, yasound_alchemy_session=None):
         """
         1 - get next track
         2 - create 'track start' event for this new track
         3 - send it to the streamer
         4 - create next 'track prepare' event
         """
+
+        if yaapp_alchemy_session == None:
+            yaapp_alchemy_session = self.yaapp_alchemy_session
+        if yasound_alchemy_session == None:
+            yasound_alchemy_session = self.yasound_alchemy_session
+
         # 1 get next track
-        track = self.get_next_track(radio_uuid, delay_before_play)
+        track = self.get_next_track(radio_uuid, delay_before_play, yaapp_alchemy_session, yasound_alchemy_session)
 
         if track is None:
             #FIXME: it crashes
@@ -380,17 +386,6 @@ class RadioScheduler():
         offset = 0
 
         # 2 store 'track start' event
-        # event = {
-        #         'type': TimeEventManager.EVENT_TYPE_NEW_TRACK_START,
-        #         'date': self.current_step_time + timedelta(seconds=delay_before_play),
-        #         'radio_uuid': radio_uuid,
-        #         'filename': track_filename,
-        #         'track_duration': track_duration
-        # }
-        # if track.is_song:
-        #     event['song_id'] = track.song_id  # add the song id in the event if the track is a song
-        # if track.is_from_show:
-        #     event['show_id'] = track.show_id
         event = TimeEvent(TimeEvent.EVENT_TYPE_NEW_TRACK_START, self.current_step_time + timedelta(seconds=delay_before_play))
         event.radio_uuid = radio_uuid
         event.filename = track_filename
@@ -407,11 +402,11 @@ class RadioScheduler():
         message = self.play_track(radio_uuid, track, delay_before_play, offset, crossfade_duration)
         return message  # for test purpose
 
-    def get_current_show(self, radio_uuid, play_time):
+    def get_current_show(self, radio_uuid, play_time, yaapp_alchemy_session):
         """
         get current show if exists
         """
-        playlists = self.yaapp_alchemy_session.query(Playlist).join(Radio).filter(Radio.uuid == radio_uuid)
+        playlists = yaapp_alchemy_session.query(Playlist).join(Radio).filter(Radio.uuid == radio_uuid)
         playlist_ids = [x[0] for x in playlists.values(Playlist.id)]
         shows = self.shows.find({'playlist_id': {'$in': playlist_ids}, 'enabled': True}).sort([('time', DESCENDING)])
         current = None
@@ -443,7 +438,7 @@ class RadioScheduler():
                         break
         return current
 
-    def get_next_track(self, radio_uuid, delay_before_play):
+    def get_next_track(self, radio_uuid, delay_before_play, yaapp_alchemy_session, yasound_alchemy_session):
         """
         a track can be a jingle, a song in a show or a song in the default playlist
         """
@@ -453,14 +448,14 @@ class RadioScheduler():
 
         if track is None:  # 2 check if we must be playing a show
             # check if one of the radio shows is currently 'on air'
-            show_current = self.get_current_show(radio_uuid, play_time)
+            show_current = self.get_current_show(radio_uuid, play_time, yaapp_alchemy_session)
             if show_current:
                 # track = self.get_song_in_show(radio_uuid, show_current['_id'], play_time)
-                track = self.playlist_manager.track_in_playlist(show_current['playlist_id'], self.yaapp_alchemy_session, self.yasound_alchemy_session)
+                track = self.playlist_manager.track_in_playlist(show_current['playlist_id'], yaapp_alchemy_session, yasound_alchemy_session)
 
         if track is None:  # 3 choose a song in the default playlist
             # track = self.get_song_default(radio_id, play_time)
-            track = self.playlist_manager.track_in_radio(radio_uuid, self.yaapp_alchemy_session, self.yasound_alchemy_session)
+            track = self.playlist_manager.track_in_radio(radio_uuid, yaapp_alchemy_session, yasound_alchemy_session)
 
         return track
 
@@ -504,7 +499,7 @@ class RadioScheduler():
         # if radio's programming is broken
         # ie current song has been played and no next song has been programmed
         if radio_state.song_end_time != None and radio_state.song_end_time < datetime.now():
-            self.prepare_track(radio_uuid, 0, 0)
+            self.prepare_track(radio_uuid, 0, 0, self.redis_listener.yaapp_alchemy_session, self.redis_listener.yasound_alchemy_session)
         return message
 
     def receive_stop_radio_message(self, data):
@@ -650,6 +645,7 @@ class RadioScheduler():
     def play_radio(self, radio_uuid, streamer):
         """
         this play function is called when a streamer ask to play a radio
+        called from redis listener thread
         """
         radio_state = self.radio_state_manager.radio_state(radio_uuid)
         if radio_state != None and radio_state.master_streamer != None:
@@ -668,7 +664,7 @@ class RadioScheduler():
             radio_state = RadioState(radio_state_doc)
             self.radio_state_manager.insert(radio_state)
             # prepare first track
-            self.prepare_track(radio_uuid, 0, 0)  # no delay, no crossfade
+            self.prepare_track(radio_uuid, 0, 0, self.redis_listener.yaapp_alchemy_session, self.redis_listener.yasound_alchemy_session)  # no delay, no crossfade
             self.logger.debug('play radio %s: need to start radio OK' % radio_uuid)
             return
 
@@ -677,7 +673,7 @@ class RadioScheduler():
         self.radio_state_manager.update(radio_state)
         if radio_state.song_id is None:
             self.logger.debug('play radio %s: no current song id, prepare new track' % radio_uuid)
-            self.prepare_track(radio_uuid, 0, 0)
+            self.prepare_track(radio_uuid, 0, 0, self.redis_listener.yaapp_alchemy_session, self.redis_listener.yasound_alchemy_session)
             self.logger.debug('play radio %s: new track prepared' % radio_uuid)
             return
 
