@@ -67,10 +67,10 @@ elif PRODUCTION_MODE:
     YASOUND_SERVER = 'https://yasound.com'
 
     yaapp_db = URL(drivername='mysql', host='yas-sql-01', database='yaapp', query=  { 'read_default_file' : '~/.my.cnf' } )
-    yaapp_alchemy_engine = create_engine(name_or_url=yaapp_db, pool_recycle=1800)
+    yaapp_alchemy_engine = create_engine(name_or_url=yaapp_db, pool_recycle=1800, pool_size=10)
 
     yasound_db = URL(drivername='mysql', host='yas-sql-01', database='yasound', query=  { 'read_default_file' : '~/.my.cnf' } )
-    yasound_alchemy_engine = create_engine(name_or_url=yasound_db, pool_recycle=1800)
+    yasound_alchemy_engine = create_engine(name_or_url=yasound_db, pool_recycle=1800, pool_size=10)
 
 elif TEST_MODE:
     YASOUND_SERVER = 'http://127.0.0.1:8000'
@@ -78,12 +78,6 @@ elif TEST_MODE:
     yasound_db_path = os.path.join(PROJECT_PATH, 'yasound_db_test_yascheduler.dat')
     yaapp_alchemy_engine = create_engine('sqlite+pysqlite:////%s' % yaapp_db_path)
     yasound_alchemy_engine = create_engine('sqlite+pysqlite:////%s' % yasound_db_path)
-
-# yaapp_session_maker = sessionmaker()
-# yaapp_session_maker.configure(bind=yaapp_alchemy_engine)
-
-# yasound_session_maker = sessionmaker()
-# yasound_session_maker.configure(bind=yasound_alchemy_engine)
 
 session_factory = sessionmaker(bind=yaapp_alchemy_engine)
 yaapp_alchemy_session = scoped_session(session_factory)
