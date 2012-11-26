@@ -47,17 +47,16 @@ class CurrentSongManager(Thread):
             #  send request...
             url = settings.YASOUND_SERVER + '/api/v1/songs_started/'
 
-            #MatDebug: !!! HACK !!! : temporarily disable yaapp request to avoid Radio.current_song problems during tests
-            # payload = {'key': settings.SCHEDULER_KEY, 'data': songs}
+            payload = {'key': settings.SCHEDULER_KEY, 'data': songs}
 
-            # response = requests.post(url, data=json.dumps(payload))
-            # result = response.json
-            # if response.status_code != 200:
-            #     ok = False
-            #     self.logger.info('current songs request failed: status code = %d' % response.status_code)
-            # elif result['success'] == False:
-            #     ok = False
-            #     self.logger.info('current songs request error: %s' % result['error'])
+            response = requests.post(url, data=json.dumps(payload))
+            result = response.json
+            if response.status_code != 200:
+                ok = False
+                self.logger.info('current songs request failed: status code = %d' % response.status_code)
+            elif result['success'] == False:
+                ok = False
+                self.logger.info('current songs request error: %s' % result['error'])
 
         except Exception, e:
             ok = False
