@@ -8,12 +8,13 @@ from datetime import datetime
 
 
 class CurrentSongManager(Thread):
+    SONG_COUNT_MAX_PER_REQUEST = 100
 
     def __init__(self):
         Thread.__init__(self)
 
         self.quit = Event()
-        self.WAIT_TIME = 2
+        self.WAIT_TIME = 0.2
         self.logger = Logger().log
 
         self.current_songs = []
@@ -36,36 +37,29 @@ class CurrentSongManager(Thread):
         if len(self.current_songs) == 0:
             return
 
-        self.logger.info('CurrentSongManager report %d songs' % len(self.current_songs))
-
-        ok = True
-        songs = self.current_songs
-        # clear songs
-        self.flush()
-
+        failed = False
+        songs = self.current_songs[:self.SONG_COUNT_MAX_PER_REQUEST]
+        song_count = len(songs)
+        self.logger.info('current songs: report %d songs (%d still in queue) ' % (song_count, len(self.current_songs) - song_count))
         try:
             #  send request...
             url = settings.YASOUND_SERVER + '/api/v1/songs_started/'
-
             payload = {'key': settings.SCHEDULER_KEY, 'data': songs}
-
             response = requests.post(url, data=json.dumps(payload))
             result = response.json
             if response.status_code != 200:
-                ok = False
+                failed = True
                 self.logger.info('current songs request failed: status code = %d' % response.status_code)
             elif result['success'] == False:
-                ok = False
+                failed = True
                 self.logger.info('current songs request error: %s' % result['error'])
-
         except Exception, e:
-            ok = False
+            failed = True
             self.logger.info('CurrentSongManager report exception: %s' % str(e))
-
-        if ok == False:
-            # songs have not been correctly sent
-            # reinsert in self.current_songs at index 0
-            self.current_songs[:0] = songs
+        if failed == False:
+            # songs have been correctly sent
+            # remove from self.current_songs
+            self.current_songs = self.current_songs[song_count:]
 
     def store(self, radio_uuid, song_id, play_date=None):
         if play_date == None:
