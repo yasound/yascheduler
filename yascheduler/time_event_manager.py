@@ -6,6 +6,7 @@ import cPickle
 from threading import Thread, Event
 import time
 from logger import Logger
+import os
 
 logger = Logger().log
 
@@ -128,3 +129,9 @@ class TimeEventManager():
         self.time_events = time_events
         logger.info('load time events OK (%d elements)' % len(self.time_events))
         return True
+
+    def flush(self):
+        try:
+            os.remove(settings.TIME_EVENTS_SAVE_FILENAME)
+        except Exception, e:
+            self.logger.info('TimeEventManager flush exception: %s' % str(e))

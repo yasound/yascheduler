@@ -76,6 +76,7 @@ class RadioScheduler():
         self.clear_mongo()
         self.playlist_manager.flush()
         self.current_song_manager.flush()
+        self.event_manager.flush()
         self.logger.debug('flushed')
 
     def stop(self):
