@@ -13,6 +13,7 @@ from logger import Logger
 
 
 def interrupt_handler(signum, frame):
+    print 'interrupt !!!'
     scheduler.stop()
 
 if __name__ == "__main__":

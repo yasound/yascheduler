@@ -16,6 +16,8 @@ from playlist_manager import PlaylistManager
 from current_song_manager import CurrentSongManager
 from time_event_manager import TimeEventManager, TimeEvent
 from radio_history import TransientRadioHistoryManager
+from monitoring import MonitoringManager
+
 
 import query_manager
 from query_manager import yaquery
@@ -63,6 +65,7 @@ class RadioScheduler():
         self.current_song_manager = CurrentSongManager()
         self.event_manager = TimeEventManager()
         self.history_manager = TransientRadioHistoryManager([self.handle_radio_history_event], [self.handle_playlist_history_event, self.playlist_manager.handle_playlist_history_event])
+        self.monitoring_manager = MonitoringManager(self)
 
     def clear_mongo(self):
         self.event_manager.clear()
@@ -84,6 +87,10 @@ class RadioScheduler():
 
     def run(self):
         self.last_step_time = datetime.now()
+
+        self.logger.debug('1')
+        self.monitoring_manager.start()
+        self.logger.debug('2')
 
         # starts thread to listen to redis events
         self.redis_listener.start()
@@ -170,12 +177,14 @@ class RadioScheduler():
             time.sleep(seconds_to_wait)
 
         self.logger.info('radio scheduler main loop is over')
+        self.monitoring_manager.join()
         self.history_manager.join()
         self.streamer_checker.join()
         self.redis_listener.join()
         self.playlist_manager.join_thread()
         self.current_song_manager.join()
         self.event_manager.join_saver()
+
 
         self.logger.info('radio scheduler "run" is over')
 
