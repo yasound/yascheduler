@@ -267,7 +267,7 @@ class MonitoringHttpServer(BaseHTTPServer.HTTPServer):
 
     def __init__(self, scheduler, port):
         self.scheduler = scheduler
-        BaseHTTPServer.HTTPServer.__init__(self, ('localhost', port), HttpHandler)
+        BaseHTTPServer.HTTPServer.__init__(self, ('0.0.0.0', port), HttpHandler)
 
 
 class MonitoringManager(Thread):
@@ -286,5 +286,5 @@ class MonitoringManager(Thread):
 
     def join(self, timeout=None):
         self.quit.set()
-        requests.get('http://localhost:%s/' % self.port)  # send request to unlock 'handle_request' loop
+        requests.get('http://0.0.0.0:%s/' % self.port)  # send request to unlock 'handle_request' loop
         super(MonitoringManager, self).join(timeout)
