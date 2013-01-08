@@ -103,8 +103,11 @@ class HttpHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         self.wfile.write("<th>song end time</th>")
         self.wfile.write("</tr>")
 
+        logger.debug('handle_radios 1')
         radios = self.server.scheduler.radio_state_manager.radio_states.find().sort([('master_streamer', ASCENDING), ('song_end_time', ASCENDING)])
+        logger.debug('handle_radios 2')
         for r in radios:
+            logger.debug('handle_radios 3 = > %s' % r['radio_uuid'])
             uuid = r['radio_uuid']
             streaming = r['master_streamer'] != None
             broken = r['song_end_time'] < datetime.now()
@@ -122,9 +125,11 @@ class HttpHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             self.wfile.write("<td>%s</td>" % song_time)
             self.wfile.write("<td>%s</td>" % song_end_time)
             self.wfile.write("</tr>")
+        logger.debug('handle_radios 4')
 
         self.wfile.write("</table>")
         self.wfile.write("</body>")
+        logger.debug('handle_radios 5')
 
     def handle_streaming_radios(self):
         self.send_response(200)
