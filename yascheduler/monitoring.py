@@ -65,7 +65,7 @@ class HttpHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         self.wfile.write("<li>%d radios</li>" % radio_count)
 
         self.wfile.write("<ul>")
-        self.wfile.write("<li>%d playing radios</li>" % playing_radio_count)
+        self.wfile.write("<li>%d streaming radios</li>" % playing_radio_count)
         self.wfile.write("<li>%d broken radios</li>" % broken_radio_count)
         self.wfile.write("</ul>")
 
@@ -108,13 +108,14 @@ class HttpHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         logger.debug('handle_radios 2')
         for r in radios:
             logger.debug('handle_radios 3 = > %s' % r['radio_uuid'])
-            uuid = r['radio_uuid']
-            streaming = r['master_streamer'] != None
-            broken = r['song_end_time'] < datetime.now()
-            master_streamer = r['master_streamer']
-            song = r['song_id']
-            song_time = r['play_time']
-            song_end_time = r['song_end_time']
+            default = '???'
+            uuid = r.get('radio_uuid', default)
+            master_streamer = r.get('master_streamer', default)
+            song = r.get('song_id', default)
+            song_time = r.get('play_time', default)
+            song_end_time = r.get('song_end_time', default)
+            streaming = master_streamer != None and master_streamer != default
+            broken = song_end_time == default or song_end_time < datetime.now()
 
             self.wfile.write("<tr>")
             self.wfile.write("<td>%s</td>" % uuid)
@@ -153,12 +154,13 @@ class HttpHandler(BaseHTTPServer.BaseHTTPRequestHandler):
 
         radios = self.server.scheduler.radio_state_manager.radio_states.find({'master_streamer': {'$ne': None}}).sort([('master_streamer', ASCENDING), ('song_end_time', ASCENDING)])
         for r in radios:
-            uuid = r['radio_uuid']
-            broken = r['song_end_time'] < datetime.now()
-            master_streamer = r['master_streamer']
-            song = r['song_id']
-            song_time = r['play_time']
-            song_end_time = r['song_end_time']
+            default = '???'
+            uuid = r.get('radio_uuid', default)
+            master_streamer = r.get('master_streamer', default)
+            song = r.get('song_id', default)
+            song_time = r.get('play_time', default)
+            song_end_time = r.get('song_end_time', default)
+            broken = song_end_time == default or song_end_time < datetime.now()
 
             self.wfile.write("<tr>")
             self.wfile.write("<td>%s</td>" % uuid)
@@ -194,12 +196,13 @@ class HttpHandler(BaseHTTPServer.BaseHTTPRequestHandler):
 
         radios = self.server.scheduler.radio_state_manager.radio_states.find({'song_end_time': {'$lt': datetime.now()}}).sort([('song_end_time', ASCENDING), ('master_streamer', ASCENDING)])
         for r in radios:
-            uuid = r['radio_uuid']
-            streaming = r['master_streamer'] != None
-            master_streamer = r['master_streamer']
-            song = r['song_id']
-            song_time = r['play_time']
-            song_end_time = r['song_end_time']
+            default = '???'
+            uuid = r.get('radio_uuid', default)
+            master_streamer = r.get('master_streamer', default)
+            song = r.get('song_id', default)
+            song_time = r.get('play_time', default)
+            song_end_time = r.get('song_end_time', default)
+            streaming = master_streamer != None and master_streamer != default
 
             self.wfile.write("<tr>")
             self.wfile.write("<td>%s</td>" % uuid)
