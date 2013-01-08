@@ -3,7 +3,7 @@ from logger import Logger
 from datetime import datetime
 from threading import Thread, Event
 import requests
-from pymongo import ASCENDING
+from pymongo import ASCENDING, DESCENDING
 
 
 logger = Logger().log
@@ -47,7 +47,7 @@ class HttpHandler(BaseHTTPServer.BaseHTTPRequestHandler):
 
         radio_count = scheduler.radio_state_manager.radio_states.count()
         playing_radio_count = scheduler.radio_state_manager.radio_states.find({'master_streamer': {'$ne': None}}).count()
-        broken_radio_count = scheduler.radio_state_manager.radio_states.find({'song_end_time': {'lt': datetime.now()}}).count()
+        broken_radio_count = scheduler.radio_state_manager.radio_states.find({'$or': [{'song_end_time': None}, {'song_end_time': {'$lt': datetime.now()}}]}).count()
 
         event_count = scheduler.event_manager.count()
 
@@ -155,7 +155,7 @@ class HttpHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             song = r.get('song_id', default)
             song_time = r.get('play_time', default)
             song_end_time = r.get('song_end_time', default)
-            broken = song_end_time == default or song_end_time < datetime.now()
+            broken = song_end_time == default or song_end_time == None or song_end_time < datetime.now()
 
             self.wfile.write("<tr>")
             self.wfile.write("<td>%s</td>" % uuid)
@@ -189,7 +189,7 @@ class HttpHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         self.wfile.write("<th>song end time</th>")
         self.wfile.write("</tr>")
 
-        radios = self.server.scheduler.radio_state_manager.radio_states.find({'song_end_time': {'$lt': datetime.now()}}).sort([('song_end_time', ASCENDING), ('master_streamer', ASCENDING)])
+        radios = self.server.scheduler.radio_state_manager.radio_states.find({'$or': [{'song_end_time': None}, {'song_end_time': {'$lt': datetime.now()}}]}).sort([('song_end_time', DESCENDING), ('master_streamer', ASCENDING)])
         for r in radios:
             default = '???'
             uuid = r.get('radio_uuid', default)
