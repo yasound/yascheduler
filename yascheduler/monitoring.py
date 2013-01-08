@@ -121,7 +121,7 @@ class HttpHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             logger.debug('handle_radios 3 : %s' % song_end_time)
             streaming = master_streamer != None and master_streamer != default
             logger.debug('handle_radios 3 : %s' % streaming)
-            broken = song_end_time == default or song_end_time < datetime.now()
+            broken = song_end_time == default or song_end_time == None or song_end_time < datetime.now()
             logger.debug('handle_radios 3 : %s' % broken)
 
             logger.debug('handle_radios 3 a')
