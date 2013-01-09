@@ -815,6 +815,11 @@ class RadioScheduler():
         store the listener status in mongodb (including the listening start date)
         and notify yaapp that a client (connected user or anonymous) started listening to a radio
         """
+        # if the radio is not being streamed, do nothing
+        radio_state = self.radio_state_manager.radio_state(radio_uuid)
+        if radio_state == None or radio_state.master_streamer == None:
+            return
+
         # send 'user started listening' request
         url_params = {'key': settings.SCHEDULER_KEY}
         if user_id is not None and user_id != '':
