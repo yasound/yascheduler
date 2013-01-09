@@ -682,9 +682,13 @@ class RadioScheduler():
         song_play_time = radio_state.play_time
         song = yaquery(query_manager.QUERY_TYPE_SONG, song_id)
         if song == None or song.song_metadata != None:
+            self.logger.debug('play radio %s: current song is invalid' % radio_uuid)
+            self.prepare_track(radio_uuid, 0, 0)
             return
         yasound_song = yaquery(query_manager.QUERY_TYPE_YASOUND_SONG, song.song_metadata.yasound_song_id)
         if yasound_song == None:
+            self.logger.debug('play radio %s: current song is invalid (cannot get yasound song object)' % radio_uuid)
+            self.prepare_track(radio_uuid, 0, 0)
             return
         track = Track(yasound_song.filename, yasound_song.duration, song_id=song_id)
         delay = 0  # FIXME: or self.SONG_PREPARE_DURATION ?
