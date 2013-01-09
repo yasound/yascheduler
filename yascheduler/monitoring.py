@@ -24,6 +24,8 @@ class HttpHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             self.handle_streamers()
         elif self.path == '/listeners':
             self.handle_listeners()
+        elif self.path.startswith('/time_events'):
+            self.handle_time_events()
         else:
             self.send_response(404)
 
@@ -232,6 +234,7 @@ class HttpHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             self.wfile.write("<tr>")
             self.wfile.write("<td>%s</td>" % s['name'])
             self.wfile.write("<td>%s</td>" % s['ping_status'])
+            self.wfile.write("</tr>")
 
         self.wfile.write("</table>")
         self.wfile.write("</body>")
@@ -261,6 +264,48 @@ class HttpHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             self.wfile.write("<td>%s</td>" % l['user_id'])
             self.wfile.write("<td>%s</td>" % l['session_id'])
             self.wfile.write("<td>%s</td>" % l['start_date'])
+            self.wfile.write("</tr>")
+
+        self.wfile.write("</table>")
+        self.wfile.write("</body>")
+
+    def handle_time_events(self):
+        from time_event_manager import time_event_type_to_string
+        radio = None
+        index = self.path.find('?')
+        if index != -1:
+            params = self.path[index + 1:]
+            for p in params.split('&'):
+                if p.startswith('radio='):
+                    radio = p[len('radio='):]
+                    break
+
+        self.send_response(200)
+        self.send_header("Content-type", "text/html")
+        self.end_headers()
+        self.wfile.write("<html><head><title>Yascheduler Monitoring</title></head>")
+        self.wfile.write("<body>")
+
+        if radio == None:
+            self.wfile.write("<p>Please pass radio uuid in params => 'radio=1q2w3e4r5t'</p>")
+            return
+
+        self.wfile.write("<p>time events for radio %s:</p>" % radio)
+
+        self.wfile.write('<table border="1">')
+
+        self.wfile.write("<tr>")
+        self.wfile.write("<th>type</th>")
+        self.wfile.write("<th>date</th>")
+        self.wfile.write("</tr>")
+
+        events = self.server.scheduler.event_manager.time_events
+        for e in events:
+            if hasattr(e, 'radio_uuid') and e.radio_uuid == radio:
+                self.wfile.write("<tr>")
+                self.wfile.write("<td>%s</td>" % time_event_type_to_string(e.event_type))
+                self.wfile.write("<td>%s</td>" % e.date)
+                self.wfile.write("</tr>")
 
         self.wfile.write("</table>")
         self.wfile.write("</body>")

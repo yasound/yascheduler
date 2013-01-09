@@ -10,6 +10,21 @@ import os
 
 logger = Logger().log
 
+def time_event_type_to_string(time_event_type):
+    if time_event_type == TimeEvent.EVENT_TYPE_NEW_HOUR_PREPARE:
+        return 'new hour prepare'
+    elif time_event_type == TimeEvent.EVENT_TYPE_NEW_TRACK_PREPARE:
+        return 'new track prepare'
+    elif time_event_type == TimeEvent.EVENT_TYPE_NEW_TRACK_START:
+        return 'new track start'
+    elif time_event_type == TimeEvent.EVENT_TYPE_TRACK_CONTINUE:
+        return 'track continue'
+    elif time_event_type == TimeEvent.EVENT_TYPE_CHECK_EXISTING_RADIOS:
+        return 'check existing radios'
+    elif time_event_type == TimeEvent.EVENT_TYPE_CHECK_PROGRAMMING:
+        return 'check programming'
+    return None
+
 
 class TimeEvent():
     EVENT_TYPE_NEW_HOUR_PREPARE = 1
