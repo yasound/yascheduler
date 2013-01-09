@@ -481,6 +481,11 @@ class RadioScheduler():
         streamer = data.get('streamer', None)
         if radio_uuid is None or streamer is None:
             return
+
+        # register streamer if needed
+        if self.streamers.find_one({'name': streamer}) == None:
+            self.register_streamer(streamer)
+
         if yaquery(query_manager.QUERY_TYPE_RADIO_EXISTS, radio_uuid):
             # radio unknown: send 'radio_unknpwn' message to the streamer
             message = self.publisher.send_radio_unknown_message(radio_uuid, streamer)

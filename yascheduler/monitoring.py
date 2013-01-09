@@ -103,7 +103,7 @@ class HttpHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         self.wfile.write("<th>song end time</th>")
         self.wfile.write("</tr>")
 
-        radios = self.server.scheduler.radio_state_manager.radio_states.find().sort([('master_streamer', ASCENDING), ('song_end_time', ASCENDING)])
+        radios = self.server.scheduler.radio_state_manager.radio_states.find().sort([('master_streamer', DESCENDING), ('song_end_time', ASCENDING)])
         for r in radios:
             default = '???'
             uuid = r.get('radio_uuid', default)
@@ -147,7 +147,7 @@ class HttpHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         self.wfile.write("<th>song end time</th>")
         self.wfile.write("</tr>")
 
-        radios = self.server.scheduler.radio_state_manager.radio_states.find({'master_streamer': {'$ne': None}}).sort([('master_streamer', ASCENDING), ('song_end_time', ASCENDING)])
+        radios = self.server.scheduler.radio_state_manager.radio_states.find({'master_streamer': {'$ne': None}}).sort([('master_streamer', DESCENDING), ('song_end_time', ASCENDING)])
         for r in radios:
             default = '???'
             uuid = r.get('radio_uuid', default)
@@ -189,7 +189,7 @@ class HttpHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         self.wfile.write("<th>song end time</th>")
         self.wfile.write("</tr>")
 
-        radios = self.server.scheduler.radio_state_manager.radio_states.find({'$or': [{'song_end_time': None}, {'song_end_time': {'$lt': datetime.now()}}]}).sort([('song_end_time', DESCENDING), ('master_streamer', ASCENDING)])
+        radios = self.server.scheduler.radio_state_manager.radio_states.find({'$or': [{'song_end_time': None}, {'song_end_time': {'$lt': datetime.now()}}]}).sort([('song_end_time', ASCENDING), ('master_streamer', DESCENDING)])
         for r in radios:
             default = '???'
             uuid = r.get('radio_uuid', default)
