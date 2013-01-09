@@ -9,7 +9,6 @@ class RedisPublisher():
     MESSAGE_TYPE_PLAY = 'play'
     MESSAGE_TYPE_RADIO_STARTED = 'radio_started'
     MESSAGE_TYPE_RADIO_STOPPED = 'radio_stopped'
-    MESSAGE_TYPE_RADIO_EXISTS = 'radio_exists'
     MESSAGE_TYPE_RADIO_UNKNOWN = 'radio_unknown'
     MESSAGE_TYPE_USER_AUTHENTICATION = 'user_authentication'
     MESSAGE_TYPE_PING = 'ping'
@@ -46,18 +45,6 @@ class RedisPublisher():
         }
         self.send_message(message, dest_streamer)
         return message  # for test purpose
-
-    def send_radio_exists_message(self, radio_uuid, dest_streamer, master_streamer):
-        """
-        send message to notify the streamer that the radio is already handled by another streamer: master_streamer
-        """
-        message = {
-                    'type': self.MESSAGE_TYPE_RADIO_EXISTS,
-                    'radio_uuid': radio_uuid,
-                    'master_streamer': master_streamer
-        }
-        self.send_message(message, dest_streamer)
-        return message
 
     def send_radio_stopped_message(self, radio_uuid, dest_streamer):
         message = {

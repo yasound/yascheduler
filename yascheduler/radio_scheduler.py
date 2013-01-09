@@ -492,14 +492,8 @@ class RadioScheduler():
             return
 
         radio_state = self.radio_state_manager.radio_state(radio_uuid)
-        if radio_state is None or radio_state.master_streamer is None:
-            # start radio if it does not exist and play it
-            message = self.publisher.send_radio_started_message(radio_uuid, streamer)
-            self.play_radio(radio_uuid, streamer)
-        else:
-            # radio already exists
-            master_streamer = radio_state.master_streamer
-            message = self.publisher.send_radio_exists_message(radio_uuid, streamer, master_streamer)
+        message = self.publisher.send_radio_started_message(radio_uuid, streamer)
+        self.play_radio(radio_uuid, streamer)
 
         # if radio's programming is broken
         # ie current song has been played and no next song has been programmed
@@ -653,8 +647,6 @@ class RadioScheduler():
         called from redis listener thread
         """
         radio_state = self.radio_state_manager.radio_state(radio_uuid)
-        if radio_state != None and radio_state.master_streamer != None:
-            return
 
         already_started = radio_state != None
         # if the radio does not exist, start it
@@ -689,7 +681,11 @@ class RadioScheduler():
         song_id = int(radio_state.song_id)
         song_play_time = radio_state.play_time
         song = yaquery(query_manager.QUERY_TYPE_SONG, song_id)
+        if song == None or song.song_metadata != None:
+            return
         yasound_song = yaquery(query_manager.QUERY_TYPE_YASOUND_SONG, song.song_metadata.yasound_song_id)
+        if yasound_song == None:
+            return
         track = Track(yasound_song.filename, yasound_song.duration, song_id=song_id)
         delay = 0  # FIXME: or self.SONG_PREPARE_DURATION ?
         elapsed_timedelta = self.current_step_time - song_play_time
