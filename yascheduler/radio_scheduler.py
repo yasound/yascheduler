@@ -30,7 +30,7 @@ class RadioScheduler():
     DEFAULT_SECONDS_TO_WAIT = 0.050  # 50 milliseconds
 
     SONG_PREPARE_DURATION = 5  # seconds
-    CROSSFADE_DURATION = 1  # seconds
+    CROSSFADE_DURATION = 0  # seconds
     CHECK_PROGRAMMING_PERIOD = 30
 
     def __init__(self, enable_ping_streamers=True, enable_programming_check=False, enable_time_profiling=False):
