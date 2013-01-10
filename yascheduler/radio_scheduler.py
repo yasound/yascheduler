@@ -681,7 +681,7 @@ class RadioScheduler():
         song_id = int(radio_state.song_id)
         song_play_time = radio_state.play_time
         song = yaquery(query_manager.QUERY_TYPE_SONG, song_id)
-        if song == None or song.song_metadata != None:
+        if song == None or song.song_metadata == None:
             self.logger.debug('play radio %s: current song is invalid' % radio_uuid)
             self.event_manager.remove_radio_events(radio_uuid)
             self.prepare_track(radio_uuid, 0, 0)
