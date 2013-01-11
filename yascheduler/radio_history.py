@@ -101,6 +101,7 @@ class TransientRadioHistoryManager():
         self.listener.join(timeout)
 
     def handle_events(self):
+        logger.info('TransientRadioHistoryManager handle events')
         self.lock.acquire()
         while True:
             doc = self.collection.find_and_modify({}, sort={'updated': ASCENDING}, remove=True)
@@ -108,6 +109,7 @@ class TransientRadioHistoryManager():
                 break
             self.handle_event(doc)
         self.lock.release()
+        logger.info('TransientRadioHistoryManager handle events DONE')
 
     def handle_event(self, event_doc):
         event_type = event_doc['type']
