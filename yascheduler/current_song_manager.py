@@ -56,7 +56,7 @@ class CurrentSongManager(Thread):
 
             # disable request in this branch,
             # the scheduler will run in a 'noop' mode without modifying yaapp data (Radio.current_song)
-            self.logger('current song report is DISABLED')
+            self.logger.info('current song report is DISABLED')
 
         except Exception, e:
             failed = True
