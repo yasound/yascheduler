@@ -42,17 +42,22 @@ class CurrentSongManager(Thread):
         song_count = len(songs)
         self.logger.info('current songs: report %d songs (%d still in queue) ' % (song_count, len(self.current_songs) - song_count))
         try:
-            #  send request...
-            url = settings.YASOUND_SERVER + '/api/v1/songs_started/'
-            payload = {'key': settings.SCHEDULER_KEY, 'data': songs}
-            response = requests.post(url, data=json.dumps(payload))
-            result = response.json
-            if response.status_code != 200:
-                failed = True
-                self.logger.info('current songs request failed: status code = %d' % response.status_code)
-            elif result['success'] == False:
-                failed = True
-                self.logger.info('current songs request error: %s' % result['error'])
+            # #  send request...
+            # url = settings.YASOUND_SERVER + '/api/v1/songs_started/'
+            # payload = {'key': settings.SCHEDULER_KEY, 'data': songs}
+            # response = requests.post(url, data=json.dumps(payload))
+            # result = response.json
+            # if response.status_code != 200:
+            #     failed = True
+            #     self.logger.info('current songs request failed: status code = %d' % response.status_code)
+            # elif result['success'] == False:
+            #     failed = True
+            #     self.logger.info('current songs request error: %s' % result['error'])
+
+            # disable request in this branch,
+            # the scheduler will run in a 'noop' mode without modifying yaapp data (Radio.current_song)
+            self.logger('current song report is DISABLED')
+
         except Exception, e:
             failed = True
             self.logger.info('CurrentSongManager report exception: %s' % str(e))
