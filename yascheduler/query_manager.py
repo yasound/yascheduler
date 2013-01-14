@@ -85,7 +85,7 @@ def query_radio_exists(radio_uuid):
 
 
 def query_ready_radios():
-    radios = settings.yaapp_alchemy_session.query(Radio).filter(Radio.ready == True, Radio.deleted == False).all()
+    radios = settings.yaapp_alchemy_session.query(Radio).filter(Radio.ready == True, Radio.origin == 0, Radio.deleted == False).all()
     return radios
 
 
