@@ -21,6 +21,42 @@ def prod():
     BRANCH = "master"
     DJANGO_MODE = 'production'
 
+def prod_noop():
+    global WEBSITE_PATH
+    global APP_PATH
+    global GIT_PATH
+    global BRANCH
+    global DJANGO_MODE
+
+    env.forward_agent = 'True'
+    env.hosts = [
+        'yas-web-09.ig-1.net',
+    ]
+    env.user = "customer"
+    WEBSITE_PATH = "/data/vhosts/y/yascheduler/"
+    APP_PATH = "yascheduler"
+    GIT_PATH = "git@github.com:yasound/yascheduler.git"
+    BRANCH = "noop"
+    DJANGO_MODE = 'production'
+
+def prod_08_noop():
+    global WEBSITE_PATH
+    global APP_PATH
+    global GIT_PATH
+    global BRANCH
+    global DJANGO_MODE
+
+    env.forward_agent = 'True'
+    env.hosts = [
+        'yas-web-08.ig-1.net',
+    ]
+    env.user = "customer"
+    WEBSITE_PATH = "/data/vhosts/y/yascheduler/"
+    APP_PATH = "yascheduler"
+    GIT_PATH = "git@github.com:yasound/yascheduler.git"
+    BRANCH = "noop"
+    DJANGO_MODE = 'production'
+
 def dev():
     global WEBSITE_PATH
     global APP_PATH

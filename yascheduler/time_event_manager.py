@@ -137,10 +137,10 @@ class TimeEventManager():
         logger.info('load time events')
         try:
             f = open(settings.TIME_EVENTS_SAVE_FILENAME, 'r')
+            time_events = cPickle.load(f)
         except:
             logger.info('load time events FAILED')
             return False
-        time_events = cPickle.load(f)
         self.time_events = time_events
         logger.info('load time events OK (%d elements)' % len(self.time_events))
         return True
