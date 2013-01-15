@@ -96,6 +96,7 @@ class HttpHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         self.wfile.write('<table border="1">')
 
         self.wfile.write("<tr>")
+        self.wfile.write("<th>#</th>")
         self.wfile.write("<th>radio</th>")
         self.wfile.write("<th>streaming</th>")
         self.wfile.write("<th>broken</th>")
@@ -106,6 +107,7 @@ class HttpHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         self.wfile.write("</tr>")
 
         radios = self.server.scheduler.radio_state_manager.radio_states.find().sort([('master_streamer', DESCENDING), ('song_end_time', ASCENDING)])
+        index = 1
         for r in radios:
             default = '???'
             uuid = r.get('radio_uuid', default)
@@ -117,6 +119,7 @@ class HttpHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             broken = song_end_time == default or song_end_time == None or song_end_time < datetime.now()
 
             self.wfile.write("<tr>")
+            self.wfile.write("<td>%d</td>" % index)
             self.wfile.write("<td>%s</td>" % uuid)
             self.wfile.write("<td>%s</td>" % streaming)
             self.wfile.write("<td>%s</td>" % broken)
@@ -125,6 +128,8 @@ class HttpHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             self.wfile.write("<td>%s</td>" % song_time)
             self.wfile.write("<td>%s</td>" % song_end_time)
             self.wfile.write("</tr>")
+
+            index += 1
 
         self.wfile.write("</table>")
         self.wfile.write("</body>")
@@ -141,6 +146,7 @@ class HttpHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         self.wfile.write('<table border="1">')
 
         self.wfile.write("<tr>")
+        self.wfile.write("<th>#</th>")
         self.wfile.write("<th>radio</th>")
         self.wfile.write("<th>broken</th>")
         self.wfile.write("<th>master streamer</th>")
@@ -150,6 +156,7 @@ class HttpHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         self.wfile.write("</tr>")
 
         radios = self.server.scheduler.radio_state_manager.radio_states.find({'master_streamer': {'$ne': None}}).sort([('master_streamer', DESCENDING), ('song_end_time', ASCENDING)])
+        index = 1
         for r in radios:
             default = '???'
             uuid = r.get('radio_uuid', default)
@@ -160,6 +167,7 @@ class HttpHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             broken = song_end_time == default or song_end_time == None or song_end_time < datetime.now()
 
             self.wfile.write("<tr>")
+            self.wfile.write("<td>%d</td>" % index)
             self.wfile.write("<td>%s</td>" % uuid)
             self.wfile.write("<td>%s</td>" % broken)
             self.wfile.write("<td>%s</td>" % master_streamer)
@@ -167,6 +175,8 @@ class HttpHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             self.wfile.write("<td>%s</td>" % song_time)
             self.wfile.write("<td>%s</td>" % song_end_time)
             self.wfile.write("</tr>")
+
+            index += 1
 
         self.wfile.write("</table>")
         self.wfile.write("</body>")
@@ -183,6 +193,7 @@ class HttpHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         self.wfile.write('<table border="1">')
 
         self.wfile.write("<tr>")
+        self.wfile.write("<th>#</th>")
         self.wfile.write("<th>radio</th>")
         self.wfile.write("<th>streaming</th>")
         self.wfile.write("<th>master streamer</th>")
@@ -192,6 +203,7 @@ class HttpHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         self.wfile.write("</tr>")
 
         radios = self.server.scheduler.radio_state_manager.radio_states.find({'$or': [{'song_end_time': None}, {'song_end_time': {'$lt': datetime.now()}}]}).sort([('song_end_time', ASCENDING), ('master_streamer', DESCENDING)])
+        index = 1
         for r in radios:
             default = '???'
             uuid = r.get('radio_uuid', default)
@@ -202,6 +214,7 @@ class HttpHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             streaming = master_streamer != None and master_streamer != default
 
             self.wfile.write("<tr>")
+            self.wfile.write("<td>%d</td>" % index)
             self.wfile.write("<td>%s</td>" % uuid)
             self.wfile.write("<td>%s</td>" % streaming)
             self.wfile.write("<td>%s</td>" % master_streamer)
@@ -209,6 +222,8 @@ class HttpHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             self.wfile.write("<td>%s</td>" % song_time)
             self.wfile.write("<td>%s</td>" % song_end_time)
             self.wfile.write("</tr>")
+
+            index += 1
 
         self.wfile.write("</table>")
         self.wfile.write("</body>")
@@ -251,6 +266,7 @@ class HttpHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         self.wfile.write('<table border="1">')
 
         self.wfile.write("<tr>")
+        self.wfile.write("<th>#</th>")
         self.wfile.write("<th>radio</th>")
         self.wfile.write("<th>user</th>")
         self.wfile.write("<th>session</th>")
@@ -258,13 +274,17 @@ class HttpHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         self.wfile.write("</tr>")
 
         listeners = self.server.scheduler.listeners.find().sort([('radio_uuid', ASCENDING), ('start_date', ASCENDING)])
+        index = 1
         for l in listeners:
             self.wfile.write("<tr>")
+            self.wfile.write("<td>%d</td>" % index)
             self.wfile.write("<td>%s</td>" % l['radio_uuid'])
             self.wfile.write("<td>%s</td>" % l['user_id'])
             self.wfile.write("<td>%s</td>" % l['session_id'])
             self.wfile.write("<td>%s</td>" % l['start_date'])
             self.wfile.write("</tr>")
+
+            index += 1
 
         self.wfile.write("</table>")
         self.wfile.write("</body>")

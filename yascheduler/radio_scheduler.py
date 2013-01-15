@@ -312,6 +312,9 @@ class RadioScheduler():
         radio_state.song_id = song_id
         radio_state.play_time = self.current_step_time
         radio_state.song_end_time = radio_state.play_time + timedelta(seconds=song_duration)
+        if radio_state.song_end_time == None:
+            self.logger.debug('radio %s: song end time is None' % radio_uuid)
+            self.logger.debug('song play date = %s - duration = %s - song end date = %s', (radio_state.play_time, song_duration, radio_state.song_end_time))
         if show_id is None:
             radio_state.show_id = None
             radio_state.show_time = None
