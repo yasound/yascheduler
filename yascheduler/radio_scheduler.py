@@ -876,8 +876,9 @@ class RadioScheduler():
         }
         if user_id is not None:
             user = yaquery(query_manager.QUERY_TYPE_USER_BY_ID, user_id)
-            url_params['username'] = user.username
-            url_params['api_key'] = user.api_key.key
+            if user is not None:
+                url_params['username'] = user.username
+                url_params['api_key'] = user.api_key.key
         url = settings.YASOUND_SERVER + '/api/v1/radio/%s/stop_listening/' % (radio_uuid,)
         requests.post(url, params=url_params)
 
