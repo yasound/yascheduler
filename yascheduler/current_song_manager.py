@@ -18,6 +18,7 @@ class CurrentSongManager(Thread):
         self.logger = Logger().log
 
         self.current_songs = []
+        self.running = False
 
     def flush(self):
         self.current_songs = []
@@ -27,11 +28,13 @@ class CurrentSongManager(Thread):
         super(CurrentSongManager, self).join(timeout)
 
     def run(self):
+        self.running = True
         while not self.quit.is_set():
             self.report()
 
             # sleep
             time.sleep(self.WAIT_TIME)
+        self.running = False
 
     def report(self):
         if len(self.current_songs) == 0:

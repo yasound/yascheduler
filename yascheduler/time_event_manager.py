@@ -56,12 +56,15 @@ class TimeEventSaver(Thread):
         Thread.__init__(self)
         self.manager = manager
         self.quit = Event()
+        self.running = False
 
     def run(self):
+        self.running = True
         while not self.quit.is_set():
             self.manager.save()
 
             time.sleep(self.WAIT_TIME)
+        self.running = False
 
     def join(self, timeout=None):
         self.quit.set()
