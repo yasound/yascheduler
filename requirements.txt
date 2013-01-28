@@ -2,7 +2,7 @@
 redis
 SQLAlchemy
 pymongo
-requests
+requests==0.14.1
 argparse
 blist
 fabric

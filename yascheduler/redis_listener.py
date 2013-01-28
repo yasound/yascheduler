@@ -25,11 +25,12 @@ class RedisListener(Thread):
         Thread.__init__(self)
         self.radio_scheduler = radio_scheduler
         self.logger = Logger().log
+        self.running = False
         self.quit = Event()
 
     def run(self):
         self.logger.debug('Redis listener run...')
-
+        self.running = True
         while not self.quit.is_set():
             try:
                 r = redis.StrictRedis(host=settings.REDIS_HOST, db=settings.REDIS_DB)
@@ -70,6 +71,7 @@ class RedisListener(Thread):
                 self.logger.info('RedisListener exception: %s' % str(err))
                 time.sleep(2)
 
+        self.running = False
         self.logger.info('RedisListener thread is over')
 
     def join(self, timeout=None):

@@ -37,6 +37,7 @@ class PlaylistBuilder(Thread):
         # access to shows
         self.shows = settings.MONGO_DB.shows
 
+        self.running = False
         self.quit = Event()
 
     def clear_data(self):
@@ -48,6 +49,7 @@ class PlaylistBuilder(Thread):
         super(PlaylistBuilder, self).join(timeout)
 
     def run(self):
+        self.running = True
         # if there is no playlist stored, insert all playlists from db
         if self.playlist_collection.find_one() == None:  # empty
             self.set_playlists()
@@ -66,6 +68,7 @@ class PlaylistBuilder(Thread):
 
             # 3 - sleep
             time.sleep(1)
+        self.running = False
 
     def playlist_count(self):
         return self.playlist_collection.count()

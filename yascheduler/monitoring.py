@@ -82,6 +82,44 @@ class HttpHandler(BaseHTTPServer.BaseHTTPRequestHandler):
 
         self.wfile.write("</ul>")
 
+        self.wfile.write("<br>")
+
+        self.wfile.write('<table border="1">')
+        self.wfile.write("<tr>")
+        self.wfile.write("<th>tool</th>")
+        self.wfile.write("<th>running</th>")
+        self.wfile.write("</tr>")
+
+        self.wfile.write("<tr>")
+        self.wfile.write("<td>%s</td>" % 'streamer checker')
+        self.wfile.write("<td>%s</td>" % self.server.scheduler.streamer_checker.running)
+        self.wfile.write("</tr>")
+
+        self.wfile.write("<tr>")
+        self.wfile.write("<td>%s</td>" % 'song reporter')
+        self.wfile.write("<td>%s</td>" % self.server.scheduler.current_song_manager.running)
+        self.wfile.write("</tr>")
+
+        self.wfile.write("<tr>")
+        self.wfile.write("<td>%s</td>" % 'playlist builder')
+        self.wfile.write("<td>%s</td>" % self.server.scheduler.playlist_manager.builder.running)
+        self.wfile.write("</tr>")
+
+        self.wfile.write("<tr>")
+        self.wfile.write("<td>%s</td>" % 'redis listener')
+        self.wfile.write("<td>%s</td>" % self.server.scheduler.redis_listener.running)
+        self.wfile.write("</tr>")
+
+        self.wfile.write("<tr>")
+        self.wfile.write("<td>%s</td>" % 'radio history checker')
+        self.wfile.write("<td>%s</td>" % self.server.scheduler.history_manager.checker.running)
+        self.wfile.write("</tr>")
+
+        self.wfile.write("<tr>")
+        self.wfile.write("<td>%s</td>" % 'event saver')
+        self.wfile.write("<td>%s</td>" % self.server.scheduler.event_manager.saver.running)
+        self.wfile.write("</tr>")
+
         self.wfile.write("</body>")
 
     def handle_radios(self):

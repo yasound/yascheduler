@@ -494,10 +494,10 @@ class RadioScheduler():
             message = self.publisher.send_radio_unknown_message(radio_uuid, streamer)
             return
 
-        radio_state = self.radio_state_manager.radio_state(radio_uuid)
         message = self.publisher.send_radio_started_message(radio_uuid, streamer)
         self.play_radio(radio_uuid, streamer)
 
+        radio_state = self.radio_state_manager.radio_state(radio_uuid)
         # if radio's programming is broken
         # ie current song has been played and no next song has been programmed
         if radio_state.song_end_time != None and radio_state.song_end_time < datetime.now():
@@ -876,8 +876,9 @@ class RadioScheduler():
         }
         if user_id is not None:
             user = yaquery(query_manager.QUERY_TYPE_USER_BY_ID, user_id)
-            url_params['username'] = user.username
-            url_params['api_key'] = user.api_key.key
+            if user is not None:
+                url_params['username'] = user.username
+                url_params['api_key'] = user.api_key.key
         url = settings.YASOUND_SERVER + '/api/v1/radio/%s/stop_listening/' % (radio_uuid,)
         requests.post(url, params=url_params)
 
