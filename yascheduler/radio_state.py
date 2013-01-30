@@ -5,7 +5,7 @@ from datetime import datetime
 class RadioStateManager():
 
     def __init__(self):
-        self.radio_states = settings.MONGO_DB.scheduler.radios.states
+        self.radio_states = settings.scheduler_db.radios.states
         self.radio_states.ensure_index('radio_uuid', unique=True)
         self.radio_states.ensure_index('song_end_time')
 

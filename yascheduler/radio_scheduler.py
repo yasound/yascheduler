@@ -33,8 +33,11 @@ class RadioScheduler():
     CROSSFADE_DURATION = 0  # seconds
     CHECK_PROGRAMMING_PERIOD = 30
 
-    def __init__(self, enable_ping_streamers=True, enable_programming_check=False, enable_time_profiling=False):
+    def __init__(self, enable_ping_streamers=True, enable_programming_check=False, enable_time_profiling=False, radio_offset=None, radio_limit=None):
         self.quit = False
+
+        self.radio_offset = radio_offset
+        self.radio_limit = radio_limit
 
         self.current_step_time = datetime.now()
         self.last_step_time = self.current_step_time
@@ -45,7 +48,7 @@ class RadioScheduler():
         self.enable_programming_check = enable_programming_check
         self.enable_time_profiling = enable_time_profiling
 
-        self.mongo_scheduler = settings.MONGO_DB.scheduler
+        self.mongo_scheduler = settings.scheduler_db
 
         self.streamers = self.mongo_scheduler.streamers
         self.streamers.ensure_index('name', unique=True)
@@ -723,7 +726,7 @@ class RadioScheduler():
         self.clean_radio_events(radio_uuid)
 
     def set_radios(self):
-        radios = yaquery(query_manager.QUERY_TYPE_READY_RADIOS)
+        radios = yaquery(query_manager.QUERY_TYPE_READY_RADIOS, self.radio_offset, self.radio_limit)
         for r in radios:
             self.start_radio(r.uuid)
 

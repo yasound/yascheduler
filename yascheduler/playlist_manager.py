@@ -24,14 +24,14 @@ class PlaylistBuilder(Thread):
 
         self.logger = Logger().log
 
-        self.playlist_collection = settings.MONGO_DB.scheduler.playlists
+        self.playlist_collection = settings.scheduler_db.playlists
         self.playlist_collection.ensure_index('playlist_id', unique=True)
         self.playlist_collection.ensure_index('radio_uuid')
         self.playlist_collection.ensure_index('playlist_is_default')
         self.playlist_collection.ensure_index('update_date')
         self.playlist_collection.ensure_index('song_count')
 
-        self.playlist_events = settings.MONGO_DB.scheduler.playlist_events
+        self.playlist_events = settings.scheduler_db.playlist_events
         self.playlist_collection.ensure_index('playlist_id')
 
         # access to shows

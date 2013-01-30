@@ -41,7 +41,7 @@ def yaquery_internal(query_type, args):
     if query_type == QUERY_TYPE_RADIO_EXISTS:
         return query_radio_exists(args[0])
     elif query_type == QUERY_TYPE_READY_RADIOS:
-        return query_ready_radios()
+        return query_ready_radios(args[0], args[1])
     elif query_type == QUERY_TYPE_ENABLED_PLAYLISTS:
         return query_enabled_playlists()
     elif query_type == QUERY_TYPE_RADIO_PLAYLISTS:
@@ -84,8 +84,14 @@ def query_radio_exists(radio_uuid):
     return exists
 
 
-def query_ready_radios():
-    radios = settings.yaapp_alchemy_session.query(Radio).filter(Radio.ready == True, Radio.origin == 0, Radio.deleted == False).all()
+def query_ready_radios(radio_offset, radio_limit):
+    first_index = radio_offset
+    if first_index == None:
+        first_index = 0
+    last_index = None
+    if radio_limit != None:
+        last_index = first_index + radio_limit
+    radios = settings.yaapp_alchemy_session.query(Radio).filter(Radio.ready == True, Radio.origin == 0, Radio.deleted == False).all()[first_index:last_index]
     return radios
 
 

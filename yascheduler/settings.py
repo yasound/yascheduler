@@ -96,4 +96,20 @@ elif TEST_MODE:
 else:
     MONGO_DB = Connection().yasound
 
+import socket
+hostname = socket.gethostname()
+
+if PRODUCTION_MODE:
+    if hostname == 'yas-web-08':
+        scheduler_db = MONGO_DB.scheduler.scheduler1
+    elif hostname == 'yas-web-09':
+        scheduler_db = MONGO_DB.scheduler.scheduler2
+elif DEVELOPMENT_MODE:
+    if hostname == 'yas-dev-01':
+        scheduler_db = MONGO_DB.scheduler.scheduler1
+    elif hostname == 'yas-dev-02':
+        scheduler_db = MONGO_DB.scheduler.scheduler2
+else:
+    scheduler_db = MONGO_DB.scheduler.scheduler1
+
 SCHEDULER_KEY = 'pibs9wn20fnq-1nfk8762ncuwecydgso'
