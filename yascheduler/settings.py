@@ -102,14 +102,19 @@ hostname = socket.gethostname()
 if PRODUCTION_MODE:
     if hostname == 'yas-web-08':
         scheduler_db = MONGO_DB.scheduler.scheduler1
+        scheduler_name = 'scheduler1'
     elif hostname == 'yas-web-09':
         scheduler_db = MONGO_DB.scheduler.scheduler2
+        scheduler_name = 'scheduler2'
 elif DEVELOPMENT_MODE:
     if hostname == 'yas-dev-01':
         scheduler_db = MONGO_DB.scheduler.scheduler1
+        scheduler_name = 'scheduler1'
     elif hostname == 'yas-dev-02':
         scheduler_db = MONGO_DB.scheduler.scheduler2
+        scheduler_name = 'scheduler2'
 else:
     scheduler_db = MONGO_DB.scheduler.scheduler1
+    scheduler_name = 'scheduler1'
 
 SCHEDULER_KEY = 'pibs9wn20fnq-1nfk8762ncuwecydgso'

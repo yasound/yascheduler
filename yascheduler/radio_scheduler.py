@@ -497,6 +497,10 @@ class RadioScheduler():
             message = self.publisher.send_radio_unknown_message(radio_uuid, streamer)
             return
 
+        if self.radio_state_manager.exists(radio_uuid) == False:
+            self.logger.info('play radio: the radio %s is not handled by %s' % (radio_uuid, settings.scheduler_name))
+            return
+
         message = self.publisher.send_radio_started_message(radio_uuid, streamer)
         self.play_radio(radio_uuid, streamer)
 
@@ -597,6 +601,11 @@ class RadioScheduler():
         if radio_uuid is None or session_id is None:
             self.logger.debug('cannot register listener: radio_uuid or session_id is None')
             return
+
+        if self.radio_state_manager.exists(radio_uuid) == False:
+            self.logger.info('register listener (%s - %s): the radio %s is not handled by %s' % (user_id, session_id, radio_uuid, settings.scheduler_name))
+            return
+
         return self.register_listener(radio_uuid, user_id, session_id)
 
     def receive_unregister_listener_message(self, data):
@@ -711,15 +720,15 @@ class RadioScheduler():
         clean radio info
         return True if the radio existed
         """
-        exists = self.radio_state_manager.exists(radio_uuid)
-        if exists:
-            self.radio_has_stopped(radio_uuid)  # send "radio stop" request to yaapp
-        # self.clean_radio(radio_uuid)  # FIXME: to check
+        if self.radio_state_manager.exists(radio_uuid) == False:
+            return False
+
+        self.radio_has_stopped(radio_uuid)  # send "radio stop" request to yaapp
         # this radio is not managed by a streamer anymore
         radio_state = self.radio_state_manager.radio_state(radio_uuid)
         radio_state.master_streamer = None
         self.radio_state_manager.update(radio_state)
-        return exists
+        return True
 
     def remove_radio(self, radio_uuid):
         self.radio_state_manager.remove(radio_uuid)
