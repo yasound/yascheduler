@@ -83,7 +83,8 @@ class TransientRadioHistoryManager():
         TYPE_RADIO_DELETED
         )
 
-    def __init__(self, radio_event_handlers=[], playlist_event_handlers=[]):
+    def __init__(self, radio_state_manager, radio_event_handlers=[], playlist_event_handlers=[]):
+        self.radio_state_manager = radio_state_manager
         self.radio_event_handlers = radio_event_handlers
         self.playlist_event_handlers = playlist_event_handlers
 
@@ -107,7 +108,8 @@ class TransientRadioHistoryManager():
         logger.info('TransientRadioHistoryManager handle events')
         self.lock.acquire()
         while True:
-            doc = self.collection.find_and_modify({}, sort={'updated': ASCENDING}, remove=True)
+            radio_uuids = self.radio_state_manager.radio_states.find().distinct('radio_uuid')
+            doc = self.collection.find_and_modify({'radio_uuid': {'$in': radio_uuids}}, sort={'updated': ASCENDING}, remove=True)
             if doc == None:
                 break
             self.handle_event(doc)

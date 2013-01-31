@@ -67,7 +67,7 @@ class RadioScheduler():
         self.playlist_manager = PlaylistManager()
         self.current_song_manager = CurrentSongManager()
         self.event_manager = TimeEventManager()
-        self.history_manager = TransientRadioHistoryManager([self.handle_radio_history_event], [self.handle_playlist_history_event, self.playlist_manager.handle_playlist_history_event])
+        self.history_manager = TransientRadioHistoryManager(self.radio_state_manager, [self.handle_radio_history_event], [self.playlist_manager.handle_playlist_history_event])
         self.monitoring_manager = MonitoringManager(self)
 
     def clear_mongo(self):
@@ -772,11 +772,6 @@ class RadioScheduler():
         elif event_type == TransientRadioHistoryManager.TYPE_RADIO_DELETED:
             self.logger.info('radio %s deleted' % radio_uuid)
             self.remove_radio(radio_uuid)
-
-    def handle_playlist_history_event(self, event_type, radio_uuid, playlist_id):
-        if event_type == TransientRadioHistoryManager.TYPE_PLAYLIST_ADDED or event_type == TransientRadioHistoryManager.TYPE_PLAYLIST_UPDATED:
-            if self.radio_state_manager.exists(radio_uuid) == False:
-                self.start_radio(radio_uuid)
 
     def clean_radio_events(self, radio_uuid):
         self.event_manager.remove_radio_events(radio_uuid)
