@@ -100,21 +100,33 @@ import socket
 hostname = socket.gethostname()
 
 if PRODUCTION_MODE:
+    radio_limit = 4000
     if hostname == 'yas-web-08':
         scheduler_db = MONGO_DB.scheduler.scheduler1
         scheduler_name = 'scheduler1'
+        default_radio_offset = 0
+        default_radio_limit = radio_limit
     elif hostname == 'yas-web-09':
         scheduler_db = MONGO_DB.scheduler.scheduler2
         scheduler_name = 'scheduler2'
+        default_radio_offset = radio_limit
+        default_radio_limit = None
 elif DEVELOPMENT_MODE:
+    radio_limit = 10
     if hostname == 'yas-dev-01':
         scheduler_db = MONGO_DB.scheduler.scheduler1
         scheduler_name = 'scheduler1'
+        default_radio_offset = 0
+        default_radio_limit = radio_limit
     elif hostname == 'yas-dev-02':
         scheduler_db = MONGO_DB.scheduler.scheduler2
         scheduler_name = 'scheduler2'
+        default_radio_offset = radio_limit
+        default_radio_limit = None
 else:
     scheduler_db = MONGO_DB.scheduler.scheduler1
     scheduler_name = 'scheduler1'
+    default_radio_offset = None
+    default_radio_limit = None
 
 SCHEDULER_KEY = 'pibs9wn20fnq-1nfk8762ncuwecydgso'
