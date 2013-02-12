@@ -130,3 +130,6 @@ else:
     default_radio_limit = None
 
 SCHEDULER_KEY = 'pibs9wn20fnq-1nfk8762ncuwecydgso'
+
+USE_RESTRICTED_RADIO_LIST = True
+

@@ -75,6 +75,24 @@ def dev():
     BRANCH = "dev"
     DJANGO_MODE = 'development'
 
+def dev_radio_list():
+    global WEBSITE_PATH
+    global APP_PATH
+    global GIT_PATH
+    global BRANCH
+    global DJANGO_MODE
+    env.forward_agent = 'True'
+    env.hosts = [
+        'yas-dev-01.ig-1.net',
+        'yas-dev-02.ig-1.net',
+    ]
+    env.user = "customer"
+    WEBSITE_PATH = "/data/vhosts/y/yascheduler/root/"
+    APP_PATH = "yascheduler"
+    GIT_PATH = "git@github.com:yasound/yascheduler.git"
+    BRANCH = "radio_set"
+    DJANGO_MODE = 'development'
+
 def deploy():
     """[DISTANT] Update distant django env
     """

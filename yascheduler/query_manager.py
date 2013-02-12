@@ -91,7 +91,15 @@ def query_ready_radios(radio_offset, radio_limit):
     last_index = None
     if radio_limit != None:
         last_index = first_index + radio_limit
-    radios = settings.yaapp_alchemy_session.query(Radio).filter(Radio.ready == True, Radio.origin == 0, Radio.deleted == False).all()[first_index:last_index]
+
+    if settings.USE_RESTRICTED_RADIO_LIST:
+        uuids = settings.MONGO_DB.yabase.radios.find({'new_streamer': True}).distinct('db_id')
+        if len(uuids) == 0:
+            radios = []
+        else:
+            radios = settings.yaapp_alchemy_session.query(Radio).filter(Radio.ready == True, Radio.origin == 0, Radio.deleted == False, Radio.uuid.in_(uuids)).all()[first_index:last_index]
+    else:
+        radios = settings.yaapp_alchemy_session.query(Radio).filter(Radio.ready == True, Radio.origin == 0, Radio.deleted == False).all()[first_index:last_index]
     return radios
 
 
