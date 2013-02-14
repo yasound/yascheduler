@@ -312,6 +312,9 @@ class RadioScheduler():
         song_duration = event.track_duration
 
         radio_state = self.radio_state_manager.radio_state(radio_uuid)
+        if radio_state == None:
+            self.logger.info('handle_new_track_start ERROR: no state data for radio %s' % radio_uuid)
+            return
         radio_state.song_id = song_id
         radio_state.play_time = self.current_step_time
         radio_state.song_end_time = radio_state.play_time + timedelta(seconds=song_duration)
