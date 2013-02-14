@@ -10,7 +10,7 @@ logger = Logger().log
 QUERY_TYPE_RADIO_EXISTS = 1
 QUERY_TYPE_READY_RADIOS = 2
 QUERY_TYPE_ENABLED_PLAYLISTS = 3
-QUERY_TYPE_RADIO_PLAYLISTS = 4
+QUERY_TYPE_RADIO_PLAYLIST_IDS = 4
 QUERY_TYPE_RADIO_DEFAULT_PLAYLIST = 5
 QUERY_TYPE_PLAYLIST = 6
 QUERY_TYPE_SONG = 7
@@ -44,8 +44,8 @@ def yaquery_internal(query_type, args):
         return query_ready_radios(args[0], args[1])
     elif query_type == QUERY_TYPE_ENABLED_PLAYLISTS:
         return query_enabled_playlists()
-    elif query_type == QUERY_TYPE_RADIO_PLAYLISTS:
-        return query_radio_playlists(args[0])
+    elif query_type == QUERY_TYPE_RADIO_PLAYLIST_IDS:
+        return query_radio_playlist_ids(args[0])
     elif query_type == QUERY_TYPE_RADIO_DEFAULT_PLAYLIST:
         return query_radio_default_playlist(args[0])
     elif query_type == QUERY_TYPE_PLAYLIST:
@@ -113,9 +113,10 @@ def query_enabled_playlists():
     return playlists
 
 
-def query_radio_playlists(radio_uuid):
+def query_radio_playlist_ids(radio_uuid):
     playlists = settings.yaapp_alchemy_session.query(Playlist).join(Radio).filter(Radio.uuid == radio_uuid)
-    return playlists
+    playlist_ids = [x[0] for x in playlists.values(Playlist.id)]
+    return playlist_ids
 
 
 def query_radio_default_playlist(radio_uuid):
