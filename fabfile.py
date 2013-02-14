@@ -57,6 +57,25 @@ def prod_08_noop():
     BRANCH = "noop"
     DJANGO_MODE = 'production'
 
+def prod__radio_list():
+    global WEBSITE_PATH
+    global APP_PATH
+    global GIT_PATH
+    global BRANCH
+    global DJANGO_MODE
+
+    env.forward_agent = 'True'
+    env.hosts = [
+        'yas-web-08.ig-1.net',
+        'yas-web-09.ig-1.net'
+    ]
+    env.user = "customer"
+    WEBSITE_PATH = "/data/vhosts/y/yascheduler/"
+    APP_PATH = "yascheduler"
+    GIT_PATH = "git@github.com:yasound/yascheduler.git"
+    BRANCH = "radio_set"
+    DJANGO_MODE = 'production'
+
 def dev():
     global WEBSITE_PATH
     global APP_PATH
