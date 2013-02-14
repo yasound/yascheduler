@@ -412,8 +412,7 @@ class RadioScheduler():
         """
         get current show if exists
         """
-        playlists = yaquery(query_manager.QUERY_TYPE_RADIO_PLAYLISTS, radio_uuid)
-        playlist_ids = [x[0] for x in playlists.values(Playlist.id)]
+        playlist_ids = yaquery(query_manager.QUERY_TYPE_RADIO_PLAYLIST_IDS, radio_uuid)
         shows = self.shows.find({'playlist_id': {'$in': playlist_ids}, 'enabled': True}).sort([('time', DESCENDING)])
         current = None
         week_days = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN']
