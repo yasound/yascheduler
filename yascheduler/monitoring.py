@@ -387,7 +387,10 @@ class MonitoringManager(Thread):
     def run(self):
         logger.info('start Monitoring htp server thread')
         while not self.quit.is_set():
-            self.server.handle_request()
+            try:
+                self.server.handle_request()
+            except Exception, err:
+                self.logger.info('Monitoring exception: %s' % str(err))
         logger.info('Monitoring htp server thread is over')
 
     def join(self, timeout=None):
