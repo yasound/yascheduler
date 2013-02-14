@@ -644,6 +644,13 @@ class RadioScheduler():
         start radio programming
         no need to be connected to a streamer which builds the mp3 stream
         """
+        if settings.USE_RESTRICTED_RADIO_LIST:
+            # handle this radio if it must be managed by the 'new' streamer
+            # check new_streamer is True
+            radio_info = settings.MONGO_DB.yabase.radios.find_one({'db_id': radio_uuid, 'new_streamer': True})
+            if radio_info == None:
+                return
+
         self.clean_radio(radio_uuid)
         # create radio state
         radio_state_doc = {'radio_uuid': radio_uuid}
