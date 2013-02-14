@@ -57,7 +57,7 @@ def prod_08_noop():
     BRANCH = "noop"
     DJANGO_MODE = 'production'
 
-def prod__radio_list():
+def prod_radio_list():
     global WEBSITE_PATH
     global APP_PATH
     global GIT_PATH
