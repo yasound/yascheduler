@@ -540,6 +540,15 @@ class RadioScheduler():
         if streamer is None:
             self.logger.debug('user auth: message does not contain streamer info')
             return
+
+        radio_uuid = data.get('radio_uuid', None)
+        if radio_uuid is None:
+            self.logger.debug('user auth: message does not contain radio uuid info')
+            return
+        if self.radio_state_manager.exists(radio_uuid) == False:
+            self.logger.info('user auth: the radio %s is not handled by %s' % (radio_uuid, settings.scheduler_name))
+            return
+
         auth_token = data.get('auth_token', None)
         if auth_token is not None:  # auth with token given by yaapp and passed to the streamer by the client
             # ask yaapp if this token is valid and the user associated

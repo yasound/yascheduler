@@ -92,6 +92,7 @@ _type_ : 'user_authentication'
 
 _params_:  
 `streamer` : streamer identifier  
+`radio_uuid` : uuid of the radio the user wants to start  
 
 `auth_token` : string  
 
