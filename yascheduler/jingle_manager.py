@@ -74,6 +74,9 @@ class JingleManager():
         self.db.remove({"model_id": jingle_model_id})
 
     def reset_jingle_info(self, jingle_model):
+        if hasattr(jingle_model, 'duration') == False:
+            logger.info('bad jingle doc (no "duration" field): %s' % jingle_model)
+            return
         jingle_model_id = jingle_model['_id']
         radio_uuid = jingle_model['radio_uuid']
         filename = jingle_model['filename']
