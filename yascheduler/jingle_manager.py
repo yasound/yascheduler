@@ -11,7 +11,7 @@ class JingleManager():
 
     def __init__(self):
         self.model_db = settings.MONGO_DB.jingles
-        self.db = settings.MONGO_DB.scheduler.jingle_status
+        self.db = settings.scheduler_db.jingle_status
         self.db.ensure_index("radio_uuid")
         self.db.ensure_index("model_id", unique=True)
 
@@ -107,7 +107,6 @@ class JingleManager():
             'reset_date': datetime.now(),
             'last_play_date': None
         }
-        logger.info("reset jingle info: doc = %s", doc)
         self.db.update({'model_id': jingle_model_id}, doc, upsert=True)
 
     def get_jingle(self, radio_uuid):

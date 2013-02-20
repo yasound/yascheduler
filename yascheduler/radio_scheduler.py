@@ -290,7 +290,7 @@ class RadioScheduler():
         if song_id is None or offset is None:
             # event does not contain a valid song id and play offset =>  start a new song !
             self.logger.info('"track continue" event does not contain a valid song id and play offset: start a new song !')
-            self.prepare_track(radio_uuid, delay_before_play, crossfade_duration)
+            self.prepare_track(radio_uuid, delay_before_play, crossfade_duration, allow_jingle=True)
             return
 
         song = yaquery(query_manager.QUERY_TYPE_SONG, song_id)
@@ -353,7 +353,8 @@ class RadioScheduler():
         # crossfade_duration = event.get('crossfade_duration', self.CROSSFADE_DURATION)
         delay_before_play = event.delay_before_play
         crossfade_duration = event.crossfade_duration
-        self.prepare_track(radio_uuid, delay_before_play, crossfade_duration)
+        allow_jingle = event.allow_jingle if hasattr(event, 'allow_jingle') else False
+        self.prepare_track(radio_uuid, delay_before_play, crossfade_duration, allow_jingle=allow_jingle)
 
     def play_track(self, radio_uuid, track, delay, offset, crossfade_duration):
         """
@@ -374,11 +375,13 @@ class RadioScheduler():
         event.radio_uuid = radio_uuid
         event.delay_before_play = next_delay_before_play
         event.crossfade_duration = next_crossfade_duration
+        if track.is_song:
+            event.allow_jingle = True
         self.event_manager.insert(event)
 
         return message
 
-    def prepare_track(self, radio_uuid, delay_before_play, crossfade_duration, ):
+    def prepare_track(self, radio_uuid, delay_before_play, crossfade_duration, allow_jingle=False):
         """
         1 - get next track
         2 - create 'track start' event for this new track
@@ -387,7 +390,7 @@ class RadioScheduler():
         """
 
         # 1 get next track
-        track = self.get_next_track(radio_uuid, delay_before_play)
+        track = self.get_next_track(radio_uuid, delay_before_play, allow_jingle)
 
         if track is None:
             #FIXME: it crashes
@@ -406,7 +409,7 @@ class RadioScheduler():
         if track.is_song:
             event.song_id = track.song_id  # add the song id in the event if the track is a song
         if track.is_from_show:
-            event.song_id = track.show_id
+            event.show_id = track.show_id
 
         self.event_manager.insert(event)
 
@@ -450,13 +453,15 @@ class RadioScheduler():
                         break
         return current
 
-    def get_next_track(self, radio_uuid, delay_before_play):
+    def get_next_track(self, radio_uuid, delay_before_play, allow_jingle):
         """
         a track can be a jingle, a song in a show or a song in the default playlist
         """
         play_time = self.current_step_time + timedelta(seconds=delay_before_play)
 
-        track = self.get_radio_jingle_track(radio_uuid)
+        track = None
+        if allow_jingle:
+            track = self.get_radio_jingle_track(radio_uuid)
 
         if track is None:  # 2 check if we must be playing a show
             # check if one of the radio shows is currently 'on air'
@@ -474,12 +479,14 @@ class RadioScheduler():
     def get_radio_jingle_track(self, radio_uuid):
         jingle = self.jingle_manager.get_jingle(radio_uuid)
         if jingle == None:
+            self.logger.info('radio %s: do not play jingle now' % (radio_uuid))
             return None
 
         filename = jingle.get('filename', None)
         duration = jingle.get('duration', None)
         name = jingle.get('name', None)
         if filename == None or duration == None:
+            self.logger.info('radio %s: bad jingle format %s' % (radio_uuid, jingle))
             return None
         track = Track(filename, duration)
         self.logger.info('radio %s: play jingle %s (%s - %s seconds)' % (radio_uuid, name, filename, duration))
@@ -524,7 +531,7 @@ class RadioScheduler():
         # if radio's programming is broken
         # ie current song has been played and no next song has been programmed
         if radio_state.song_end_time != None and radio_state.song_end_time < datetime.now():
-            self.prepare_track(radio_uuid, 0, 0)
+            self.prepare_track(radio_uuid, 0, 0, allow_jingle=True)
         return message
 
     def receive_stop_radio_message(self, data):
@@ -708,7 +715,7 @@ class RadioScheduler():
             radio_state = RadioState(radio_state_doc)
             self.radio_state_manager.insert(radio_state)
             # prepare first track
-            self.prepare_track(radio_uuid, 0, 0)  # no delay, no crossfade
+            self.prepare_track(radio_uuid, 0, 0, allow_jingle=True)  # no delay, no crossfade
             self.logger.debug('play radio %s: need to start radio OK' % radio_uuid)
             return
 
@@ -717,7 +724,7 @@ class RadioScheduler():
         self.radio_state_manager.update(radio_state)
         if radio_state.song_id is None:
             self.logger.debug('play radio %s: no current song id, prepare new track' % radio_uuid)
-            self.prepare_track(radio_uuid, 0, 0)
+            self.prepare_track(radio_uuid, 0, 0, allow_jingle=True)
             self.logger.debug('play radio %s: new track prepared' % radio_uuid)
             return
 
@@ -731,13 +738,13 @@ class RadioScheduler():
         if song == None or song.song_metadata == None:
             self.logger.debug('play radio %s: current song is invalid' % radio_uuid)
             self.event_manager.remove_radio_events(radio_uuid)
-            self.prepare_track(radio_uuid, 0, 0)
+            self.prepare_track(radio_uuid, 0, 0, allow_jingle=True)
             return
         yasound_song = yaquery(query_manager.QUERY_TYPE_YASOUND_SONG, song.song_metadata.yasound_song_id)
         if yasound_song == None:
             self.logger.debug('play radio %s: current song is invalid (cannot get yasound song object)' % radio_uuid)
             self.event_manager.remove_radio_events(radio_uuid)
-            self.prepare_track(radio_uuid, 0, 0)
+            self.prepare_track(radio_uuid, 0, 0, allow_jingle=True)
             return
         track = Track(yasound_song.filename, yasound_song.duration, song_id=song_id)
         delay = 0  # FIXME: or self.SONG_PREPARE_DURATION ?
@@ -768,6 +775,7 @@ class RadioScheduler():
 
     def set_radios(self):
         radios = yaquery(query_manager.QUERY_TYPE_READY_RADIOS, self.radio_offset, self.radio_limit)
+        self.logger.info('set radios: %d radios to start' % len(radios))
         for r in radios:
             self.start_radio(r.uuid)
 
