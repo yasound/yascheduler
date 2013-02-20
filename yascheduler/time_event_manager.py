@@ -152,4 +152,4 @@ class TimeEventManager():
         try:
             os.remove(settings.TIME_EVENTS_SAVE_FILENAME)
         except Exception, e:
-            self.logger.info('TimeEventManager flush exception: %s' % str(e))
+            logger.info('TimeEventManager flush exception: %s' % str(e))
