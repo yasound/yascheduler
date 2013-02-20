@@ -83,9 +83,20 @@ class TransientRadioHistoryManager():
         TYPE_RADIO_DELETED
         )
 
-    def __init__(self, radio_event_handlers=[], playlist_event_handlers=[]):
+    TYPE_JINGLE_ADDED = 'jingle_added'
+    TYPE_JINGLE_UPDATED = 'jingle_updated'
+    TYPE_JINGLE_DELETED = 'jingle_deleted'
+
+    jingle_event_types = (
+        TYPE_JINGLE_ADDED,
+        TYPE_JINGLE_UPDATED,
+        TYPE_JINGLE_DELETED
+        )
+
+    def __init__(self, radio_event_handlers=[], playlist_event_handlers=[], jingle_event_handlers=[]):
         self.radio_event_handlers = radio_event_handlers
         self.playlist_event_handlers = playlist_event_handlers
+        self.jingle_event_handlers = jingle_event_handlers
 
         self.db = settings.MONGO_DB
         self.collection = self.db.scheduler.transient.radios
@@ -118,10 +129,13 @@ class TransientRadioHistoryManager():
         event_type = event_doc['type']
         radio_uuid = event_doc['radio_uuid']
         playlist_id = event_doc['playlist_id']
+        jingle_id = event_doc['jingle_id']
         if event_type in self.radio_event_types and radio_uuid != None:
             self.handle_radio_event(event_type, radio_uuid)
         elif event_type in self.playlist_event_types and playlist_id != None:
             self.handle_playlist_event(event_type, radio_uuid, playlist_id)
+        elif event_type in self.jingle_event_types and jingle_id != None:
+            self.handle_jingle_event(event_type, radio_uuid, jingle_id)
 
     def handle_radio_event(self, event_type, radio_uuid):
         logger.info('TransientRadioHistoryManager: %s - %s' % (event_type, radio_uuid))
@@ -132,3 +146,8 @@ class TransientRadioHistoryManager():
         logger.info('TransientRadioHistoryManager: %s - %s' % (event_type, playlist_id))
         for func in self.playlist_event_handlers:
             func(event_type, radio_uuid, playlist_id)
+
+    def handle_jingle_event(self, event_type, radio_uuid, jingle_id):
+        logger.info('TransientRadioHistoryManager: %s - %s' % (event_type, jingle_id))
+        for func in self.jingle_event_handlers:
+            func(event_type, radio_uuid, jingle_id)

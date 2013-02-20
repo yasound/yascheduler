@@ -17,6 +17,7 @@ from current_song_manager import CurrentSongManager
 from time_event_manager import TimeEventManager, TimeEvent
 from radio_history import TransientRadioHistoryManager
 from monitoring import MonitoringManager
+from jingle_manager import JingleManager
 
 
 import query_manager
@@ -64,8 +65,10 @@ class RadioScheduler():
         self.playlist_manager = PlaylistManager()
         self.current_song_manager = CurrentSongManager()
         self.event_manager = TimeEventManager()
-        self.history_manager = TransientRadioHistoryManager([self.handle_radio_history_event], [self.handle_playlist_history_event, self.playlist_manager.handle_playlist_history_event])
+        self.jingle_manager = JingleManager()
+        self.history_manager = TransientRadioHistoryManager([self.handle_radio_history_event], [self.handle_playlist_history_event, self.playlist_manager.handle_playlist_history_event], [self.handle_jingle_history_event])
         self.monitoring_manager = MonitoringManager(self)
+
 
     def clear_mongo(self):
         self.event_manager.clear()
@@ -80,6 +83,7 @@ class RadioScheduler():
         self.playlist_manager.flush()
         self.current_song_manager.flush()
         self.event_manager.flush()
+        self.jingle_manager.reset()
         self.logger.debug('flushed')
 
     def stop(self):
@@ -304,7 +308,7 @@ class RadioScheduler():
         if not radio_uuid:
             self.logger.debug('handle_new_track_start ERROR: radio uuid is none in event')
             return
-        song_id = event.song_id
+        song_id = event.song_id if hasattr(event, 'song_id') else None
         show_id = event.show_id if hasattr(event, 'show_id') else None
         song_duration = event.track_duration
 
@@ -465,8 +469,18 @@ class RadioScheduler():
         return track
 
     def get_radio_jingle_track(self, radio_uuid):
-        # self.logger.info('get radio jingle track')
-        return None  # TODO
+        jingle = self.jingle_manager.get_jingle(radio_uuid)
+        if jingle == None:
+            return None
+
+        filename = jingle.get('filename', None)
+        duration = jingle.get('duration', None)
+        name = jingle.get('name', None)
+        if filename == None or duration == None:
+            return None
+        track = Track(filename, duration)
+        self.logger.info('radio %s: play jingle %s (%s - %s seconds)' % (radio_uuid, name, filename, duration))
+        return track
 
     def get_time_jingle_track(self, radio_uuid, time):
         """
@@ -776,6 +790,14 @@ class RadioScheduler():
         if event_type == TransientRadioHistoryManager.TYPE_PLAYLIST_ADDED or event_type == TransientRadioHistoryManager.TYPE_PLAYLIST_UPDATED:
             if self.radio_state_manager.exists(radio_uuid) == False:
                 self.start_radio(radio_uuid)
+
+    def handle_jingle_history_event(self, event_type, radio_uuid, jingle_id):
+        if event_type == TransientRadioHistoryManager.TYPE_JINGLE_ADDED:
+            self.jingle_manager.jingle_added(jingle_id)
+        elif event_type == TransientRadioHistoryManager.TYPE_JINGLE_UPDATED:
+            self.jingle_manager.jingle_updated(jingle_id)
+        elif event_type == TransientRadioHistoryManager.TYPE_JINGLE_DELETED:
+            self.jingle_manager.jingle_deleted(jingle_id)
 
     def clean_radio_events(self, radio_uuid):
         self.event_manager.remove_radio_events(radio_uuid)

@@ -26,6 +26,8 @@ class HttpHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             self.handle_listeners()
         elif self.path.startswith('/time_events'):
             self.handle_time_events()
+        elif self.path.startswith('/jingles'):
+            self.handle_jingles()
         else:
             self.send_response(404)
 
@@ -364,6 +366,58 @@ class HttpHandler(BaseHTTPServer.BaseHTTPRequestHandler):
                 self.wfile.write("<td>%s</td>" % time_event_type_to_string(e.event_type))
                 self.wfile.write("<td>%s</td>" % e.date)
                 self.wfile.write("</tr>")
+
+        self.wfile.write("</table>")
+        self.wfile.write("</body>")
+
+    def handle_jingles(self):
+        radio = None
+        index = self.path.find('?')
+        if index != -1:
+            params = self.path[index + 1:]
+            for p in params.split('&'):
+                if p.startswith('radio='):
+                    radio = p[len('radio='):]
+                    break
+
+        self.send_response(200)
+        self.send_header("Content-type", "text/html")
+        self.end_headers()
+        self.wfile.write("<html><head><title>Yascheduler Monitoring</title></head>")
+        self.wfile.write("<body>")
+
+        if radio != None:
+            self.wfile.write("<p>jingles for radio %s:</p>" % radio)
+        else:
+            self.wfile.write("<p>jingles for all radios</p>")
+
+        self.wfile.write('<table border="1">')
+
+        self.wfile.write("<tr>")
+        self.wfile.write("<th>#</th>")
+        self.wfile.write("<th>radio</th>")
+        self.wfile.write("<th>name</th>")
+        self.wfile.write("<th>filename</th>")
+        self.wfile.write("<th>duration</th>")
+        self.wfile.write("<th>nb songs between plays</th>")
+        self.wfile.write("<th>songs to wait before next play</th>")
+        self.wfile.write("<th>last play</th>")
+        self.wfile.write("</tr>")
+
+        index = 0
+        jingles = self.server.scheduler.jingle_manager.jingles(radio)
+        for j in jingles:
+            self.wfile.write("<tr>")
+            self.wfile.write("<td>%s</td>" % index)
+            self.wfile.write("<td>%s</td>" % j['radio_uuid'])
+            self.wfile.write("<td>%s</td>" % j['name'])
+            self.wfile.write("<td>%s</td>" % j['filename'])
+            self.wfile.write("<td>%s</td>" % j['duration'])
+            self.wfile.write("<td>%s</td>" % j['songs_to_wait'])
+            self.wfile.write("<td>%s</td>" % j['current_songs_to_wait'])
+            self.wfile.write("<td>%s</td>" % j['last_play_date'])
+            self.wfile.write("</tr>")
+            index += 1
 
         self.wfile.write("</table>")
         self.wfile.write("</body>")
