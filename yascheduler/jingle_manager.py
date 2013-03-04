@@ -85,14 +85,15 @@ class JingleManager():
 
         ok = False
         songs_to_wait = 0
-        for schedule in jingle_model['schedule']:
-            if schedule['type'] == self.BETWEEN_SONGS_TYPE:
-                value = int(schedule['range'])
-                if ok == True:
-                    songs_to_wait = min(songs_to_wait, value)
-                else:
-                    songs_to_wait = value
-                ok = True
+        if jingle_model['schedule']:
+            for schedule in jingle_model['schedule']:
+                if schedule['type'] == self.BETWEEN_SONGS_TYPE:
+                    value = int(schedule['range'])
+                    if ok == True:
+                        songs_to_wait = min(songs_to_wait, value)
+                    else:
+                        songs_to_wait = value
+                    ok = True
 
         if ok == False:
             logger.info("reset jingle info: ERROR jingle manager can only handle jingles of type 'between_songs' => cannot handle %s" % jingle_model)
